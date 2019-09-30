@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+"intp-www",
+"interpreter"
+]
