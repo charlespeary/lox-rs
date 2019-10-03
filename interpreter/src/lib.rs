@@ -4,19 +4,18 @@ extern crate derive_more;
 extern crate lazy_static;
 mod ast;
 mod errors;
+mod lexer;
 mod parser;
-mod scanner;
 mod token;
 mod utils;
-mod lexer;
 use crate::ast::print_ast;
+use crate::errors::{print_lexer_errors, print_parser_errors, LexerError, ParserError};
+use crate::lexer::Lexer;
 use crate::parser::Parser;
-use scanner::Scanner;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::{self, BufRead};
 use std::{env, fs::File};
-use crate::lexer::Lexer;
 
 pub fn run_prompt() {
     loop {
@@ -30,12 +29,22 @@ pub fn run_prompt() {
 
 pub fn run_code(source_code: &str) {
     let mut lexer = Lexer::new(source_code);
-    lexer.scan_tokens();
-    let mut scanner = Scanner::new(source_code);
-    scanner.scan_tokens();
-    println!("Tokens: {:#?}", scanner.tokens);
-    let mut parser = Parser::new(&scanner.tokens);
-    let ast = parser.parse_tokens();
+    let tokens = lexer.scan_tokens();
+    match tokens {
+        Ok(tokens) => {
+            println!("Tokens: {:#?}", &tokens);
+            let mut parser = Parser::new(&tokens);
+            let expr = parser.parse_tokens();
+            match expr {
+                Ok(expr) => {
+                    println!("This program is valid!");
+                    print_ast(expr.clone());
+                }
+                Err(e) => print_parser_errors(&e),
+            }
+        }
+        Err(errors) => print_lexer_errors(&errors),
+    }
 }
 
 pub fn run_file(path: &str) {
@@ -56,11 +65,11 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let file_name = args.get(1);
     println!("test");
-//    match file_name {
-//        Some(file_name) => {
-//            println!("Opening file...");
-//            run_file(file_name);
-//        }
-//        _ => run_prompt(),
-//    }
+    //    match file_name {
+    //        Some(file_name) => {
+    //            println!("Opening file...");
+    //            run_file(file_name);
+    //        }
+    //        _ => run_prompt(),
+    //    }
 }

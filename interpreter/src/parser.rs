@@ -1,6 +1,6 @@
 use super::token::{Literal, TokenType};
 use crate::ast::print_ast;
-use crate::errors::{Error, ErrorType};
+use crate::errors::{Error, ErrorType, ParserError};
 use crate::token::Token;
 
 //    expression     → equality ;
@@ -51,7 +51,7 @@ pub enum Statement {}
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
     current: usize,
-    errors: Vec<Error>,
+    errors: Vec<ParserError>,
 }
 
 //type ParserResult = Result<Box<Expression>, ErrorType>;
@@ -69,12 +69,6 @@ impl<'a> Parser<'a> {
         self.errors.len() == 0
     }
 
-    pub fn show_errors(&self) {
-        for error in self.errors.iter() {
-            let error_message = error.error_type.to_string();
-            println!("{} at {}.{}", error_message, error.line, error.line_offset);
-        }
-    }
     // TODO: most of this is shared between lexer and parser, move it to separate data container and reuse it
     fn get_current(&self) -> Option<Token> {
         self.tokens.get(self.current).map(|t| t.clone())
@@ -111,23 +105,22 @@ impl<'a> Parser<'a> {
         item
     }
 
-    pub fn parse_tokens(&mut self) -> ParserResult {
+    pub fn parse_tokens(&mut self) -> Result<ParserResult, Vec<ParserError>> {
         let expr = self.expression();
         if self.is_valid() {
-            println!("This program is valid!");
-            print_ast(expr.clone());
-        } else {
-            self.show_errors();
+            return Ok(expr);
         }
-        expr
+        Err(self.errors.clone())
     }
 
     fn error(&mut self, error_type: ErrorType) -> Expression {
         let token = self.get_current().unwrap();
-        let error = Error {
-            line: token.line,
-            line_offset: token.line_offset,
-            error_type: error_type.clone(),
+        let error = ParserError {
+            error: Error {
+                line: token.line,
+                line_offset: token.line_offset,
+                error_type: error_type.clone(),
+            },
         };
         self.errors.push(error);
         Expression::Error(error_type)
