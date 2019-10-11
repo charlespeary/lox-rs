@@ -31,6 +31,10 @@ impl Lexer {
         self.source_code.get(self.current).cloned().unwrap()
     }
 
+    fn has_current(&self) -> bool {
+        self.current < self.source_code.len()
+    }
+
     fn get_next(&mut self) -> Option<char> {
         if self.has_next() {
             return Some(self.advance());
@@ -135,8 +139,7 @@ impl Lexer {
     fn get_number(&mut self) -> Result<Token, LexerError> {
         let mut value = self.get_current().to_string();
         while let Some(c) = self.peek() {
-            println!("next: {}", c);
-            if c.is_numeric() || (c == '.' && !self.peek_match('.')) {
+            if is_numeric(c) {
                 value.push(c);
                 self.advance();
             } else {
@@ -169,15 +172,11 @@ impl Lexer {
 
     fn get_literal(&mut self) -> Result<Token, LexerError> {
         let c = self.get_current();
-        println!("CURRENT: {}", c);
         if c == '"' {
-            println!("getting string");
             self.get_string()
         } else if is_numeric(c) {
-            println!("getting number");
             self.get_number()
         } else if c.is_alphanumeric() {
-            println!("getting alphanumeric");
             self.get_identifier(c)
         } else {
             self.raise_error(ErrorType::UnexpectedCharacter)
@@ -185,16 +184,18 @@ impl Lexer {
     }
 
     pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Vec<LexerError>> {
-        while self.has_next() {
-            let c = self.advance();
-            println!("now: {}", c);
+        while self.has_current() {
+            let c = self.get_current();
             // early match to discard items that won't return token type
             match c {
                 ' ' | '\t' | '\r' => {
-                    self.line_offset += 1;
+                    self.advance();
                     continue;
                 }
-                '\n' => self.next_line(),
+                '\n' => {
+                    self.next_line();
+                    continue;
+                }
                 _ => (),
             }
 
@@ -251,12 +252,21 @@ impl Lexer {
                 }
                 _ => self.get_literal(),
             };
-            println!("{:#?}", &token);
+
+            self.advance();
+
             match token {
-                Ok(t) => self.tokens.push(t),
-                Err(e) => self.errors.push(e),
+                Ok(t) => {
+                    self.tokens.push(t);
+                }
+                Err(e) => {
+                    self.errors.push(e);
+                }
             }
         }
+
+        self.create_token(TokenType::EOF);
+
         if self.errors.len() > 0 {
             return Err(self.errors.clone());
         }

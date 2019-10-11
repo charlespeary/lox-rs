@@ -3,43 +3,25 @@ use crate::ast::print_ast;
 use crate::errors::{Error, ErrorType, ParserError};
 use crate::token::Token;
 
-//    expression     → equality ;
-//    equality       → comparison ( ( "!=" | "==" ) comparison )* ;
-//    comparison     → addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
-//    addition       → multiplication ( ( "-" | "+" ) multiplication )* ;
-//    multiplication → unary ( ( "/" | "*" ) unary )* ;
-//    unary          → ( "!" | "-" ) unary
-//    | primary ;
-//    primary        → NUMBER | STRING | "false" | "true" | "nil"
-//    | "(" expression ")" ;
-
-#[derive(Debug, Display, Clone)]
 pub enum Operator {
-    #[display(fmt = "==")]
-    Compare,
-    #[display(fmt = "!=")]
-    BangEquals,
-    #[display(fmt = "<")]
-    Less,
-    #[display(fmt = "<=")]
-    LessEquals,
-    #[display(fmt = ">")]
-    More,
-    #[display(fmt = ">=")]
-    MoreEquals,
-    #[display(fmt = "+")]
-    Plus,
-    #[display(fmt = "-")]
-    Minus,
-    #[display(fmt = "*")]
-    Star,
-    #[display(fmt = "/")]
+    Add,
+    Subtract,
+    Multiply,
     Divide,
+}
+
+fn operator(token_type: TokenType) -> Operator {
+    match token_type {
+        TokenType::Divide => Operator::Divide,
+        TokenType::Star => Operator::Multiply,
+        TokenType::Minus => Operator::Subtract,
+        _ => Operator::Add,
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Expression {
-    Binary(Box<Expression>, TokenType, Box<Expression>),
+    Binary(Box<Expression>, Operator, Box<Expression>),
     Literal(Literal),
     Unary(TokenType, Box<Expression>),
     Grouping(Box<Expression>),
@@ -84,6 +66,14 @@ impl<'a> Parser<'a> {
         self.tokens
             .get(self.current - 1)
             .map(|t| t.token_type.clone())
+    }
+
+    fn get_operator(&self) -> Operator {
+        operator(self.previous().unwrap())
+    }
+
+    fn get_operator(&self) -> UnaryOperator {
+        unary_operator(self.previous().unwrap())
     }
 
     fn next_matches(&mut self, to_match: Vec<TokenType>) -> bool {
@@ -133,7 +123,7 @@ impl<'a> Parser<'a> {
     fn equality(&mut self) -> ParserResult {
         let mut expr = self.comparison();
         while self.next_matches(vec![TokenType::Bang, TokenType::BangEquals]) {
-            let operator = self.previous().unwrap();
+            let operator = self.get_operator();
             let right = self.comparison();
             expr = Box::new(Expression::Binary(expr, operator, right));
         }
@@ -148,7 +138,7 @@ impl<'a> Parser<'a> {
             TokenType::Greater,
             TokenType::GreaterEquals,
         ]) {
-            let operator = self.previous().unwrap();
+            let operator = self.get_operator();
             let right = self.addition();
             expr = Box::new(Expression::Binary(expr, operator, right));
         }
@@ -158,7 +148,7 @@ impl<'a> Parser<'a> {
     fn addition(&mut self) -> ParserResult {
         let mut expr = self.multiplication();
         while self.next_matches(vec![TokenType::Minus, TokenType::Plus]) {
-            let operator = self.previous().unwrap();
+            let operator = self.get_operator();
             let right = self.multiplication();
             expr = Box::new(Expression::Binary(expr, operator, right));
         }
@@ -168,7 +158,7 @@ impl<'a> Parser<'a> {
     fn multiplication(&mut self) -> ParserResult {
         let mut expr = self.unary();
         while self.next_matches(vec![TokenType::Star, TokenType::Divide]) {
-            let operator = self.previous().unwrap();
+            let operator = self.get_operator();
             let right = self.unary();
             expr = Box::new(Expression::Binary(expr, operator, right));
         }
@@ -177,7 +167,7 @@ impl<'a> Parser<'a> {
 
     fn unary(&mut self) -> ParserResult {
         if self.next_matches(vec![TokenType::Bang, TokenType::Minus]) {
-            let operator = self.previous().unwrap();
+            let operator = self.get_unary_operator();
             let right = self.unary();
             return Box::new(Expression::Unary(operator, right));
         }

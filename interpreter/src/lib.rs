@@ -4,6 +4,7 @@ extern crate derive_more;
 extern crate lazy_static;
 mod ast;
 mod errors;
+mod interpreter;
 mod lexer;
 mod parser;
 mod token;
@@ -32,7 +33,7 @@ pub fn run_code(source_code: &str) {
     let tokens = lexer.scan_tokens();
     match tokens {
         Ok(tokens) => {
-            println!("Tokens: {:#?}", &tokens);
+            println!("{:#?}", &tokens);
             let mut parser = Parser::new(&tokens);
             let expr = parser.parse_tokens();
             match expr {

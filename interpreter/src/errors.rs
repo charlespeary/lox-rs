@@ -29,9 +29,9 @@ pub struct ParserError {
 }
 
 pub fn print_lexer_errors(errors: &Vec<LexerError>) {
-    //    println!("{:#?}", errors);
+    println!("{:#?}", errors);
 }
 
 pub fn print_parser_errors(errors: &Vec<ParserError>) {
-    //    println!("{:#?}", errors);
+    println!("{:#?}", errors);
 }
