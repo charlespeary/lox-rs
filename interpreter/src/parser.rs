@@ -2,20 +2,45 @@ use super::token::{Literal, TokenType};
 use crate::ast::print_ast;
 use crate::errors::{Error, ErrorType, ParserError};
 use crate::token::Token;
+use crate::parser::Expression::Unary;
 
+
+#[derive(Debug, Clone, Display)]
 pub enum Operator {
-    Add,
-    Subtract,
+    #[display(fmt = "+")]
+    Plus,
+    #[display(fmt = "-")]
+    Minus,
+    #[display(fmt = "*")]
     Multiply,
+    #[display(fmt = "/")]
     Divide,
+    #[display(fmt = "!")]
+    Bang
+}
+
+#[derive(Debug, Clone, Display)]
+pub enum UnaryOperator {
+    #[display(fmt = "!")]
+    Bang,
+    #[display(fmt = "-")]
+    Minus
 }
 
 fn operator(token_type: TokenType) -> Operator {
     match token_type {
         TokenType::Divide => Operator::Divide,
         TokenType::Star => Operator::Multiply,
-        TokenType::Minus => Operator::Subtract,
-        _ => Operator::Add,
+        TokenType::Minus => Operator::Minus,
+        TokenType::Bang => Operator::Bang,
+        _ => Operator::Plus
+    }
+}
+
+fn unary_operator(token_type: TokenType) -> UnaryOperator {
+    match token_type {
+        TokenType::Minus => UnaryOperator::Minus,
+        _ => UnaryOperator::Bang
     }
 }
 
@@ -23,7 +48,7 @@ fn operator(token_type: TokenType) -> Operator {
 pub enum Expression {
     Binary(Box<Expression>, Operator, Box<Expression>),
     Literal(Literal),
-    Unary(TokenType, Box<Expression>),
+    Unary(UnaryOperator, Box<Expression>),
     Grouping(Box<Expression>),
     Error(ErrorType), // temp
 }
@@ -72,7 +97,7 @@ impl<'a> Parser<'a> {
         operator(self.previous().unwrap())
     }
 
-    fn get_operator(&self) -> UnaryOperator {
+    fn get_unary_operator(&self) -> UnaryOperator {
         unary_operator(self.previous().unwrap())
     }
 

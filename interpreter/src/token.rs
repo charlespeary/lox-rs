@@ -4,9 +4,7 @@ use std::collections::HashMap;
 pub enum Literal {
     String(String),
     Number(f64),
-    Boolean(bool),
-    Unknown(String),
-    Null,
+    Identifier(String),
 }
 #[derive(Debug, Clone, PartialEq, Display)]
 pub enum Keyword {
@@ -28,7 +26,7 @@ pub enum Keyword {
     Print,
 }
 
-#[derive(Debug, PartialEq, Clone, Display)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     EOF,
     OpenParenthesis,
@@ -38,7 +36,6 @@ pub enum TokenType {
     Coma,
     Dot,
     Minus,
-    #[display(fmt = "+")]
     Plus,
     Star,
     Divide,

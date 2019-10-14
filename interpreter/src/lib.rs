@@ -17,6 +17,7 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::{self, BufRead};
 use std::{env, fs::File};
+use crate::interpreter::visit_expr;
 
 pub fn run_prompt() {
     loop {
@@ -40,6 +41,7 @@ pub fn run_code(source_code: &str) {
                 Ok(expr) => {
                     println!("This program is valid!");
                     print_ast(expr.clone());
+                    println!("Result : {}", visit_expr(expr));
                 }
                 Err(e) => print_parser_errors(&e),
             }
