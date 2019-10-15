@@ -1,9 +1,8 @@
 use super::token::{Literal, TokenType};
 use crate::ast::print_ast;
 use crate::errors::{Error, ErrorType, ParserError};
-use crate::token::Token;
 use crate::parser::Expression::Unary;
-
+use crate::token::Token;
 
 #[derive(Debug, Clone, Display)]
 pub enum Operator {
@@ -15,8 +14,6 @@ pub enum Operator {
     Multiply,
     #[display(fmt = "/")]
     Divide,
-    #[display(fmt = "!")]
-    Bang
 }
 
 #[derive(Debug, Clone, Display)]
@@ -24,7 +21,7 @@ pub enum UnaryOperator {
     #[display(fmt = "!")]
     Bang,
     #[display(fmt = "-")]
-    Minus
+    Minus,
 }
 
 fn operator(token_type: TokenType) -> Operator {
@@ -32,15 +29,14 @@ fn operator(token_type: TokenType) -> Operator {
         TokenType::Divide => Operator::Divide,
         TokenType::Star => Operator::Multiply,
         TokenType::Minus => Operator::Minus,
-        TokenType::Bang => Operator::Bang,
-        _ => Operator::Plus
+        _ => Operator::Plus,
     }
 }
 
 fn unary_operator(token_type: TokenType) -> UnaryOperator {
     match token_type {
         TokenType::Minus => UnaryOperator::Minus,
-        _ => UnaryOperator::Bang
+        _ => UnaryOperator::Bang,
     }
 }
 

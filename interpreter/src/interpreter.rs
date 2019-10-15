@@ -1,43 +1,33 @@
-use crate::parser::{Expression, Operator};
+use crate::parser::{Expression, Operator, UnaryOperator};
+use crate::runtime_value::{RuntimeError, Value};
 use crate::token::{Literal, TokenType};
 
+type InterpreterResult = Result<Value, RuntimeError>;
 
-fn add(left: Literal, right: Literal) -> Literal {
-    match left {
-         Literal::Number(left_val) => {
-                match right {
-                    Literal::Number(right_val) => {
-                        return Literal::Number(left_val + right_val)
-                    }
-                    _ => left
-                }
-        }
-        _ => Literal::Number(0.0)
-    }
-}
-
-pub fn visit_expr(expr: Box<Expression>) -> Literal {
+pub fn interpret(expr: Box<Expression>) -> InterpreterResult {
     match *expr {
-        Expression::Literal(literal) => literal,
+        Expression::Literal(literal) => Ok(Value::new(literal)),
         Expression::Binary(left, operator, right) => {
-            let left_val = visit_expr(left);
-            let right_val = visit_expr(right);
+            let a = interpret(left)?;
+            let b = interpret(right)?;
             match operator {
-                 Operator::Plus => {
-                        add(left_val, right_val)
-                }
-                Operator::Minus => {
-                    subtract(left_val, right_val)
-                }
-                Operator::Multiply => {
-                    multiply(left_val, right_val)
-                }
-                Operator::Divide => {
-                    divide(left_val, right_val)
-                }
-                _ => Literal::Number(0.0)
+                Operator::Plus => a + b,
+                Operator::Minus => a - b,
+                Operator::Multiply => a * b,
+                Operator::Divide => a / b,
             }
         }
-        _ => Literal::Number(0.0)
+        Expression::Grouping(expr) => interpret(expr),
+        Expression::Unary(operator, expr) => {
+            let val = interpret(expr)?;
+            match operator {
+                UnaryOperator::Minus => match val {
+                    Value::Number(val) => Ok(Value::Number(val * -1.0)),
+                    _ => Err(RuntimeError::UnaryTypeMismatch),
+                },
+                UnaryOperator::Bang => Ok(Value::Boolean(!val.to_bool())),
+            }
+        }
+        _ => Ok(Value::Null),
     }
 }

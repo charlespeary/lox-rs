@@ -7,17 +7,18 @@ mod errors;
 mod interpreter;
 mod lexer;
 mod parser;
+mod runtime_value;
 mod token;
 mod utils;
 use crate::ast::print_ast;
 use crate::errors::{print_lexer_errors, print_parser_errors, LexerError, ParserError};
+use crate::interpreter::interpret;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::{self, BufRead};
 use std::{env, fs::File};
-use crate::interpreter::visit_expr;
 
 pub fn run_prompt() {
     loop {
@@ -41,7 +42,7 @@ pub fn run_code(source_code: &str) {
                 Ok(expr) => {
                     println!("This program is valid!");
                     print_ast(expr.clone());
-                    println!("Result : {}", visit_expr(expr));
+                    println!("Result : {:#?}", interpret(expr));
                 }
                 Err(e) => print_parser_errors(&e),
             }

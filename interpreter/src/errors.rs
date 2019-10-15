@@ -35,5 +35,3 @@ pub fn print_lexer_errors(errors: &Vec<LexerError>) {
 pub fn print_parser_errors(errors: &Vec<ParserError>) {
     println!("{:#?}", errors);
 }
-
-
