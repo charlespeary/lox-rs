@@ -5,10 +5,12 @@ use crate::utils::is_numeric;
 use std::iter::Peekable;
 use std::str::Chars;
 
+#[derive(Debug)]
 pub struct Lexer {
     source_code: Vec<char>,
     pub tokens: Vec<Token>,
-    current: usize,
+    current: char,
+    index: usize,
     line_offset: usize,
     line: usize,
     errors: Vec<LexerError>,
@@ -19,39 +21,38 @@ impl Lexer {
         Lexer {
             source_code: source_code.chars().collect(),
             tokens: Vec::new(),
-            current: 0,
-            line_offset: 1,
+            current: ' ',
+            index: 0,
+            line_offset: 0,
             line: 1,
             errors: Vec::new(),
         }
     }
 
-    fn get_current(&self) -> char {
-        // this function is always called inside code that is wrapped in while self.has_next(), so we're sure that we won't run out of chars
-        self.source_code.get(self.current).cloned().unwrap()
-    }
-
-    fn has_current(&self) -> bool {
-        self.current < self.source_code.len()
+    fn advance(&mut self) {
+        self.index += 1;
     }
 
     fn get_next(&mut self) -> Option<char> {
-        if self.has_next() {
-            return Some(self.advance());
+        let item = self.source_code.get(self.index).cloned();
+        if let Some(c) = &item {
+            self.current = c.clone();
         }
-        None
+        self.index += 1;
+        self.line_offset += 1;
+        return item;
     }
 
     fn peek(&self) -> Option<char> {
-        self.source_code.get(self.current + 1).cloned()
+        self.source_code.get(self.index + 1).cloned()
     }
 
     fn previous(&self) -> Option<char> {
-        self.source_code.get(self.current - 1).cloned()
+        self.source_code.get(self.index - 1).cloned()
     }
 
     fn next_matches(&mut self, to_match: char) -> bool {
-        if to_match == self.get_current() {
+        if to_match == self.current {
             self.advance();
             return true;
         }
@@ -72,8 +73,7 @@ impl Lexer {
     }
 
     fn skip_line(&mut self) {
-        while self.has_next() {
-            let c = self.advance();
+        while let Some(c) = self.get_next() {
             if c == '\n' {
                 self.next_line();
                 self.advance();
@@ -92,14 +92,6 @@ impl Lexer {
         false
     }
 
-    // TODO: rethink flow of the chars
-    fn advance(&mut self) -> char {
-        let item = self.source_code[self.current];
-        self.current += 1;
-        self.line_offset += 1;
-        item
-    }
-
     fn has_next(&self) -> bool {
         self.peek().is_some()
     }
@@ -111,7 +103,7 @@ impl Lexer {
                 line: self.line,
                 error_type,
             },
-            literal: self.get_current(),
+            literal: self.current,
         })
     }
 
@@ -125,8 +117,7 @@ impl Lexer {
 
     fn get_string(&mut self) -> Result<Token, LexerError> {
         let mut value = String::new();
-        while self.has_next() {
-            let c = self.advance();
+        while let Some(c) = self.get_next() {
             if c == '"' {
                 return self.create_token(TokenType::Literal(Literal::String(value)));
             } else {
@@ -137,12 +128,17 @@ impl Lexer {
     }
 
     fn get_number(&mut self) -> Result<Token, LexerError> {
-        let mut value = self.get_current().to_string();
+        let mut value = self.current.to_string();
+        println!("starting with {}", value);
         while let Some(c) = self.peek() {
+            println!("index : {}", self.index);
+            println!("next {:#?}", self.peek());
             if is_numeric(c) {
+                println!("pushing");
                 value.push(c);
                 self.advance();
             } else {
+                println!("finished");
                 break;
             }
         }
@@ -152,8 +148,8 @@ impl Lexer {
         }
     }
 
-    fn get_identifier(&mut self, first_character: char) -> Result<Token, LexerError> {
-        let mut identifier_literal = self.get_current().to_string();
+    fn get_identifier(&mut self) -> Result<Token, LexerError> {
+        let mut identifier_literal = self.current.to_string();
         while let Some(c) = self.get_next() {
             if c == '\n' || c == ' ' {
                 break;
@@ -171,25 +167,24 @@ impl Lexer {
     }
 
     fn get_literal(&mut self) -> Result<Token, LexerError> {
-        let c = self.get_current();
+        let c = self.current;
         if c == '"' {
             self.get_string()
         } else if is_numeric(c) {
             self.get_number()
         } else if c.is_alphanumeric() {
-            self.get_identifier(c)
+            self.get_identifier()
         } else {
             self.raise_error(ErrorType::UnexpectedCharacter)
         }
     }
 
     pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Vec<LexerError>> {
-        while self.has_current() {
-            let c = self.get_current();
+        while let Some(c) = self.get_next() {
+            println!("current : {} next: {:#?}", c, self.peek().unwrap());
             // early match to discard items that won't return token type
             match c {
                 ' ' | '\t' | '\r' => {
-                    self.advance();
                     continue;
                 }
                 '\n' => {
@@ -252,8 +247,6 @@ impl Lexer {
                 }
                 _ => self.get_literal(),
             };
-
-            self.advance();
 
             match token {
                 Ok(t) => {

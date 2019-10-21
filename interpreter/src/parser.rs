@@ -3,6 +3,15 @@ use crate::ast::print_ast;
 use crate::errors::{Error, ErrorType, ParserError};
 use crate::parser::Expression::Unary;
 use crate::token::Token;
+use crate::token::TokenType::OpenBrace;
+
+#[derive(Debug, Clone, Display)]
+pub enum UnaryOperator {
+    #[display(fmt = "!")]
+    Bang,
+    #[display(fmt = "-")]
+    Minus,
+}
 
 #[derive(Debug, Clone, Display)]
 pub enum Operator {
@@ -14,14 +23,18 @@ pub enum Operator {
     Multiply,
     #[display(fmt = "/")]
     Divide,
-}
-
-#[derive(Debug, Clone, Display)]
-pub enum UnaryOperator {
-    #[display(fmt = "!")]
-    Bang,
-    #[display(fmt = "-")]
-    Minus,
+    #[display(fmt = "!=")]
+    BangEquals,
+    #[display(fmt = "==")]
+    Equals,
+    #[display(fmt = ">")]
+    Greater,
+    #[display(fmt = ">=")]
+    GreaterEquals,
+    #[display(fmt = "<")]
+    Less,
+    #[display(fmt = "<=")]
+    LessEquals,
 }
 
 fn operator(token_type: TokenType) -> Operator {
@@ -29,6 +42,13 @@ fn operator(token_type: TokenType) -> Operator {
         TokenType::Divide => Operator::Divide,
         TokenType::Star => Operator::Multiply,
         TokenType::Minus => Operator::Minus,
+        TokenType::Greater => Operator::Greater,
+        TokenType::GreaterEquals => Operator::GreaterEquals,
+        TokenType::Less => Operator::Less,
+        TokenType::LessEquals => Operator::LessEquals,
+        TokenType::Equals => Operator::Equals,
+        TokenType::BangEquals => Operator::BangEquals,
+        // TODO: throw otherwise
         _ => Operator::Plus,
     }
 }
@@ -36,10 +56,11 @@ fn operator(token_type: TokenType) -> Operator {
 fn unary_operator(token_type: TokenType) -> UnaryOperator {
     match token_type {
         TokenType::Minus => UnaryOperator::Minus,
+        TokenType::Bang => UnaryOperator::Bang,
+        // TODO: throw otherwise
         _ => UnaryOperator::Bang,
     }
 }
-
 #[derive(Debug, Clone)]
 pub enum Expression {
     Binary(Box<Expression>, Operator, Box<Expression>),
@@ -61,6 +82,7 @@ pub struct Parser<'a> {
 type ParserResult = Box<Expression>;
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
+        println!("{:#?}", tokens);
         Parser {
             tokens,
             current: 0,
@@ -143,7 +165,7 @@ impl<'a> Parser<'a> {
 
     fn equality(&mut self) -> ParserResult {
         let mut expr = self.comparison();
-        while self.next_matches(vec![TokenType::Bang, TokenType::BangEquals]) {
+        while self.next_matches(vec![TokenType::Equals, TokenType::BangEquals]) {
             let operator = self.get_operator();
             let right = self.comparison();
             expr = Box::new(Expression::Binary(expr, operator, right));

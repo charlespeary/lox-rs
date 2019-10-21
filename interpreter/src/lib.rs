@@ -22,7 +22,7 @@ use std::{env, fs::File};
 
 pub fn run_prompt() {
     loop {
-        println!(" >");
+        println!(">");
         let mut code = String::new();
         let stdin = io::stdin();
         stdin.lock().read_line(&mut code).unwrap();
@@ -35,12 +35,10 @@ pub fn run_code(source_code: &str) {
     let tokens = lexer.scan_tokens();
     match tokens {
         Ok(tokens) => {
-            println!("{:#?}", &tokens);
             let mut parser = Parser::new(&tokens);
             let expr = parser.parse_tokens();
             match expr {
                 Ok(expr) => {
-                    println!("This program is valid!");
                     print_ast(expr.clone());
                     println!("Result : {:#?}", interpret(expr));
                 }
@@ -63,17 +61,4 @@ pub fn run_file(path: &str) {
         }
         _ => println!("This file doesn't exist!"),
     }
-}
-
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let file_name = args.get(1);
-    println!("test");
-    //    match file_name {
-    //        Some(file_name) => {
-    //            println!("Opening file...");
-    //            run_file(file_name);
-    //        }
-    //        _ => run_prompt(),
-    //    }
 }

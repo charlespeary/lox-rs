@@ -3,14 +3,10 @@ use std::ops::{Add, Div, Mul, Sub};
 
 #[derive(Clone, Debug)]
 pub enum RuntimeError {
-    AdditionTypeMismatch,
-    SubtractionTypeMismatch,
-    MultiplicationTypeMismatch,
-    DivisionTypeMismatch,
-    UnaryTypeMismatch,
+    WrongType,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Value {
     String(String),
     Number(f64),
@@ -25,7 +21,6 @@ impl Value {
         match literal {
             Literal::Number(val) => Value::Number(val),
             Literal::String(val) => Value::String(val),
-            // TODO: not sure what to do with identifier yet
             Literal::Identifier(val) => Value::String(val),
         }
     }
@@ -44,23 +39,10 @@ impl Add for Value {
     type Output = InterpreterResult;
 
     fn add(self, value: Value) -> InterpreterResult {
-        // TODO: these errors should be more robust, but for now it's just fine
-        match self {
-            Value::Number(a) => match value {
-                Value::Number(b) => Ok(Value::Number(a + b)),
-                _ => Err(RuntimeError::AdditionTypeMismatch),
-            },
-            Value::Boolean(a) => match value {
-                // TODO: not sure how to handle boolean logic yet
-                Value::Boolean(b) => Ok(Value::Boolean(a && b)),
-                _ => Err(RuntimeError::AdditionTypeMismatch),
-            },
-            Value::String(a) => match value {
-                Value::String(b) => Ok(Value::String([a, b].concat())),
-                _ => Err(RuntimeError::AdditionTypeMismatch),
-            },
-            // never add null to anything
-            Value::Null => Err(RuntimeError::AdditionTypeMismatch),
+        match (self, value) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
+            (Value::String(a), Value::String(b)) => Ok(Value::String([a, b].concat())),
+            _ => Err(RuntimeError::WrongType),
         }
     }
 }
@@ -69,14 +51,9 @@ impl Sub for Value {
     type Output = InterpreterResult;
 
     fn sub(self, value: Value) -> InterpreterResult {
-        // TODO: these errors should be more robust, but for now it's just fine
-        match self {
-            Value::Number(a) => match value {
-                Value::Number(b) => Ok(Value::Number(a - b)),
-                _ => Err(RuntimeError::SubtractionTypeMismatch),
-            },
-            // never add null to anything
-            _ => Err(RuntimeError::SubtractionTypeMismatch),
+        match (self, value) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
+            _ => Err(RuntimeError::WrongType),
         }
     }
 }
@@ -85,14 +62,9 @@ impl Mul for Value {
     type Output = InterpreterResult;
 
     fn mul(self, value: Value) -> InterpreterResult {
-        // TODO: these errors should be more robust, but for now it's just fine
-        match self {
-            Value::Number(a) => match value {
-                Value::Number(b) => Ok(Value::Number(a * b)),
-                _ => Err(RuntimeError::MultiplicationTypeMismatch),
-            },
-            // never add null to anything
-            _ => Err(RuntimeError::MultiplicationTypeMismatch),
+        match (self, value) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
+            _ => Err(RuntimeError::WrongType),
         }
     }
 }
@@ -101,14 +73,63 @@ impl Div for Value {
     type Output = InterpreterResult;
 
     fn div(self, value: Value) -> InterpreterResult {
-        // TODO: these errors should be more robust, but for now it's just fine
-        match self {
-            Value::Number(a) => match value {
-                Value::Number(b) => Ok(Value::Number(a / b)),
-                _ => Err(RuntimeError::DivisionTypeMismatch),
-            },
-            // never add null to anything
-            _ => Err(RuntimeError::DivisionTypeMismatch),
+        match (self, value) {
+            (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a / b)),
+            _ => Err(RuntimeError::WrongType),
         }
+    }
+}
+
+pub fn equals(first: Value, second: Value) -> InterpreterResult {
+    match (first, second) {
+        (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a == b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a == b)),
+        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
+        (Value::Null, Value::Null) => Ok(Value::Boolean(true)),
+        _ => Err(RuntimeError::WrongType),
+    }
+}
+
+pub fn bang_equals(first: Value, second: Value) -> InterpreterResult {
+    match (first, second) {
+        (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a != b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a != b)),
+        (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a != b)),
+        (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
+        _ => Err(RuntimeError::WrongType),
+    }
+}
+
+pub fn greater_equals(first: Value, second: Value) -> InterpreterResult {
+    match (first, second) {
+        (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a >= b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() >= b.len())),
+        _ => Err(RuntimeError::WrongType),
+    }
+}
+
+pub fn greater(first: Value, second: Value) -> InterpreterResult {
+    match (first, second) {
+        (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a > b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() > b.len())),
+        _ => Err(RuntimeError::WrongType),
+    }
+}
+
+pub fn less_equals(first: Value, second: Value) -> InterpreterResult {
+    match (first, second) {
+        (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a <= b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() <= b.len())),
+        (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
+        _ => Err(RuntimeError::WrongType),
+    }
+}
+
+pub fn less(first: Value, second: Value) -> InterpreterResult {
+    match (first, second) {
+        (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a < b)),
+        (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() < b.len())),
+        (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
+        _ => Err(RuntimeError::WrongType),
     }
 }
