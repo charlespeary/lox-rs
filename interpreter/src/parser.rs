@@ -2,11 +2,12 @@ use super::token::{Literal, TokenType};
 use crate::ast::print_ast;
 use crate::errors::{Error, ErrorType, ParserError};
 use crate::parser::Expression::Unary;
+use crate::statement::Stmt;
 use crate::token::Token;
 use crate::token::TokenType::OpenBrace;
 
 #[derive(Debug, Clone, Display)]
-pub enum UnaryOperator {
+pub enum UnaryOperatorType {
     #[display(fmt = "!")]
     Bang,
     #[display(fmt = "-")]
@@ -14,7 +15,7 @@ pub enum UnaryOperator {
 }
 
 #[derive(Debug, Clone, Display)]
-pub enum Operator {
+pub enum OperatorType {
     #[display(fmt = "+")]
     Plus,
     #[display(fmt = "-")]
@@ -70,8 +71,6 @@ pub enum Expression {
     Error(ErrorType), // temp
 }
 
-pub enum Statement {}
-
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
     current: usize,
@@ -82,7 +81,6 @@ pub struct Parser<'a> {
 type ParserResult = Box<Expression>;
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
-        println!("{:#?}", tokens);
         Parser {
             tokens,
             current: 0,
@@ -112,7 +110,7 @@ impl<'a> Parser<'a> {
     }
 
     fn get_operator(&self) -> Operator {
-        operator(self.previous().unwrap())
+        let operator_type = operator(self.previous().unwrap());
     }
 
     fn get_unary_operator(&self) -> UnaryOperator {
@@ -138,7 +136,15 @@ impl<'a> Parser<'a> {
         item
     }
 
+    fn is_at_end(&self) -> bool {
+        self.get_current() == TokenType::EOF
+    }
+
     pub fn parse_tokens(&mut self) -> Result<ParserResult, Vec<ParserError>> {
+        //        let statements: Vec<Stmt> = Vec::new();
+        //        while (!self.is_at_end()) {
+        //            statements.push(self.statement());
+        //        }
         let expr = self.expression();
         if self.is_valid() {
             return Ok(expr);
@@ -158,6 +164,16 @@ impl<'a> Parser<'a> {
         self.errors.push(error);
         Expression::Error(error_type)
     }
+
+    //    fn statement(&mut self) -> Stmt {
+    //        if self.next_matches(vec![TokenType::])
+    //    }
+    //
+    //    fn print_statement(&mut self) -> Stmt {
+    //
+    //    }
+    //
+    //    fn expression_statement(&mut self) -> Stmt {}
 
     fn expression(&mut self) -> ParserResult {
         self.equality()

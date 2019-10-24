@@ -8,6 +8,7 @@ mod interpreter;
 mod lexer;
 mod parser;
 mod runtime_value;
+mod statement;
 mod token;
 mod utils;
 use crate::ast::print_ast;
@@ -39,7 +40,7 @@ pub fn run_code(source_code: &str) {
             let expr = parser.parse_tokens();
             match expr {
                 Ok(expr) => {
-                    print_ast(expr.clone());
+                    //                    print_ast(expr.clone());
                     println!("Result : {:#?}", interpret(expr));
                 }
                 Err(e) => print_parser_errors(&e),

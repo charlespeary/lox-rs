@@ -66,7 +66,7 @@ fn visit_node(expr: Box<Expression>, depth: usize, levels: &mut Vec<Vec<String>>
 }
 
 pub fn print_ast(expr: Box<Expression>) {
-    let height = calculate_height(&(*expr), 0);
+    let height = calculate_height(&(*expr), 1);
     let mut levels: Vec<Vec<String>> = vec![Vec::new(); height + 1];
 
     visit_node(expr, 0, &mut levels);

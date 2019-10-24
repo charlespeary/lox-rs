@@ -44,7 +44,7 @@ impl Lexer {
     }
 
     fn peek(&self) -> Option<char> {
-        self.source_code.get(self.index + 1).cloned()
+        self.source_code.get(self.index).cloned()
     }
 
     fn previous(&self) -> Option<char> {
@@ -129,16 +129,11 @@ impl Lexer {
 
     fn get_number(&mut self) -> Result<Token, LexerError> {
         let mut value = self.current.to_string();
-        println!("starting with {}", value);
         while let Some(c) = self.peek() {
-            println!("index : {}", self.index);
-            println!("next {:#?}", self.peek());
             if is_numeric(c) {
-                println!("pushing");
                 value.push(c);
                 self.advance();
             } else {
-                println!("finished");
                 break;
             }
         }
@@ -158,8 +153,7 @@ impl Lexer {
             // check if identifier is one of the keywords
             let identifier = KEYWORDS.get::<str>(&identifier_literal);
             if let Some(value) = identifier {
-                self.next_line();
-                return self.create_token(TokenType::Keyword((*value).clone()));
+                return self.create_token(value);
             }
         }
         // if not return it as an identifier
@@ -181,7 +175,6 @@ impl Lexer {
 
     pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Vec<LexerError>> {
         while let Some(c) = self.get_next() {
-            println!("current : {} next: {:#?}", c, self.peek().unwrap());
             // early match to discard items that won't return token type
             match c {
                 ' ' | '\t' | '\r' => {
@@ -205,38 +198,10 @@ impl Lexer {
                 '+' => self.create_token(TokenType::Plus),
                 '*' => self.create_token(TokenType::Star),
                 ';' => self.create_token(TokenType::Semicolon),
-                '!' => {
-                    let token_type = if self.next_matches('=') {
-                        TokenType::BangEquals
-                    } else {
-                        TokenType::Bang
-                    };
-                    self.create_token(token_type)
-                }
-                '<' => {
-                    let token_type = if self.next_matches('=') {
-                        TokenType::LessEquals
-                    } else {
-                        TokenType::Less
-                    };
-                    self.create_token(token_type)
-                }
-                '>' => {
-                    let token_type = if self.next_matches('=') {
-                        TokenType::GreaterEquals
-                    } else {
-                        TokenType::Greater
-                    };
-                    self.create_token(token_type)
-                }
-                '=' => {
-                    let token_type = if self.next_matches('=') {
-                        TokenType::Compare
-                    } else {
-                        TokenType::Equals
-                    };
-                    self.create_token(token_type)
-                }
+                '!' => TokenType::Bang,
+                '<' => TokenType::Less,
+                '>' => TokenType::GreaterEquals,
+                '=' => TokenType::Equals,
                 '/' => {
                     let token_type = if self.next_comment() {
                         TokenType::Comment

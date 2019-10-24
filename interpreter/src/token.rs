@@ -6,25 +6,6 @@ pub enum Literal {
     Number(f64),
     Identifier(String),
 }
-#[derive(Debug, Clone, PartialEq, Display)]
-pub enum Keyword {
-    If,
-    Else,
-    False,
-    True,
-    Var,
-    While,
-    For,
-    And,
-    Or,
-    Function,
-    Return,
-    Class,
-    Super,
-    This,
-    Null,
-    Print,
-}
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
@@ -49,7 +30,22 @@ pub enum TokenType {
     Compare,
     Equals,
     Comment,
-    Keyword(Keyword),
+    If,
+    Else,
+    False,
+    True,
+    Var,
+    While,
+    For,
+    And,
+    Or,
+    Function,
+    Return,
+    Class,
+    Super,
+    This,
+    Null,
+    Print,
     Literal(Literal),
 }
 
@@ -71,24 +67,28 @@ impl Token {
 }
 
 lazy_static! {
-    pub static ref KEYWORDS: HashMap<&'static str, Keyword> = {
-        let mut map: HashMap<&'static str, Keyword> = HashMap::new();
-        map.insert("if", Keyword::If);
-        map.insert("else", Keyword::Else);
-        map.insert("false", Keyword::False);
-        map.insert("true", Keyword::True);
-        map.insert("var", Keyword::Var);
-        map.insert("while", Keyword::While);
-        map.insert("for", Keyword::For);
-        map.insert("and", Keyword::And);
-        map.insert("or", Keyword::Or);
-        map.insert("fn", Keyword::Function);
-        map.insert("return", Keyword::Return);
-        map.insert("class", Keyword::Class);
-        map.insert("super", Keyword::Super);
-        map.insert("this", Keyword::This);
-        map.insert("null", Keyword::Null);
-        map.insert("print", Keyword::Print);
+    pub static ref KEYWORDS: HashMap<&'static str, TokenType> = {
+        let mut map: HashMap<&'static str, TokenType> = HashMap::new();
+        map.insert("if", TokenType::If);
+        map.insert("else", TokenType::Else);
+        map.insert("false", TokenType::False);
+        map.insert("true", TokenType::True);
+        map.insert("var", TokenType::Var);
+        map.insert("while", TokenType::While);
+        map.insert("for", TokenType::For);
+        map.insert("&&", TokenType::And);
+        map.insert("||", TokenType::Or);
+        map.insert("==", TokenType::Equals);
+        map.insert("!=", TokenType::BangEquals);
+        map.insert("<=", TokenType::LessEquals);
+        map.insert(">=", TokenType::GreaterEquals);
+        map.insert("fn", TokenType::Function);
+        map.insert("return", TokenType::Return);
+        map.insert("class", TokenType::Class);
+        map.insert("super", TokenType::Super);
+        map.insert("this", TokenType::This);
+        map.insert("null", TokenType::Null);
+        map.insert("print", TokenType::Print);
         map
     };
 }

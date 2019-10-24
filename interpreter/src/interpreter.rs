@@ -38,6 +38,5 @@ pub fn interpret(expr: Box<Expression>) -> InterpreterResult {
         }
         _ => Ok(Value::Null),
     };
-    println!("RESULT: {:#?}", res);
     res
 }
