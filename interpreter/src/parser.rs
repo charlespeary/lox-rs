@@ -7,15 +7,7 @@ use crate::token::Token;
 use crate::token::TokenType::OpenBrace;
 
 #[derive(Debug, Clone, Display)]
-pub enum UnaryOperatorType {
-    #[display(fmt = "!")]
-    Bang,
-    #[display(fmt = "-")]
-    Minus,
-}
-
-#[derive(Debug, Clone, Display)]
-pub enum OperatorType {
+pub enum Operator {
     #[display(fmt = "+")]
     Plus,
     #[display(fmt = "-")]
@@ -36,6 +28,14 @@ pub enum OperatorType {
     Less,
     #[display(fmt = "<=")]
     LessEquals,
+}
+
+#[derive(Debug, Clone, Display)]
+pub enum UnaryOperator {
+    #[display(fmt = "!")]
+    Bang,
+    #[display(fmt = "-")]
+    Minus,
 }
 
 fn operator(token_type: TokenType) -> Operator {
@@ -62,6 +62,7 @@ fn unary_operator(token_type: TokenType) -> UnaryOperator {
         _ => UnaryOperator::Bang,
     }
 }
+
 #[derive(Debug, Clone)]
 pub enum Expression {
     Binary(Box<Expression>, Operator, Box<Expression>),
@@ -110,7 +111,7 @@ impl<'a> Parser<'a> {
     }
 
     fn get_operator(&self) -> Operator {
-        let operator_type = operator(self.previous().unwrap());
+        operator(self.previous().unwrap())
     }
 
     fn get_unary_operator(&self) -> UnaryOperator {
@@ -137,7 +138,12 @@ impl<'a> Parser<'a> {
     }
 
     fn is_at_end(&self) -> bool {
-        self.get_current() == TokenType::EOF
+        if let Some(token) = self.get_current() {
+            if token.token_type == TokenType::EOF {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn parse_tokens(&mut self) -> Result<ParserResult, Vec<ParserError>> {

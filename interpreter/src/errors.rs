@@ -8,6 +8,10 @@ pub enum ErrorType {
     UnparsableExpression,
     #[display(fmt = "Unclosed parenthesis")]
     UnclosedParenthesis,
+    #[display(fmt = "Expected operator")]
+    ExpectedOperator,
+    #[display(fmt = "Expected unary operator")]
+    ExpectedUnaryOperator,
 }
 
 #[derive(Debug, Clone)]

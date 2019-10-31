@@ -152,8 +152,8 @@ impl Lexer {
             identifier_literal.push(c);
             // check if identifier is one of the keywords
             let identifier = KEYWORDS.get::<str>(&identifier_literal);
-            if let Some(value) = identifier {
-                return self.create_token(value);
+            if let Some(token_type) = identifier {
+                return self.create_token(token_type.clone());
             }
         }
         // if not return it as an identifier
@@ -187,30 +187,35 @@ impl Lexer {
                 _ => (),
             }
 
-            let token = match c {
-                '(' => self.create_token(TokenType::OpenParenthesis),
-                ')' => self.create_token(TokenType::CloseParenthesis),
-                '{' => self.create_token(TokenType::OpenBrace),
-                '}' => self.create_token(TokenType::CloseBrace),
-                ',' => self.create_token(TokenType::Coma),
-                '.' => self.create_token(TokenType::Dot),
-                '-' => self.create_token(TokenType::Minus),
-                '+' => self.create_token(TokenType::Plus),
-                '*' => self.create_token(TokenType::Star),
-                ';' => self.create_token(TokenType::Semicolon),
-                '!' => TokenType::Bang,
-                '<' => TokenType::Less,
-                '>' => TokenType::GreaterEquals,
-                '=' => TokenType::Equals,
+            let token_type: Option<TokenType> = match c {
+                '(' => Some(TokenType::OpenParenthesis),
+                ')' => Some(TokenType::CloseParenthesis),
+                '{' => Some(TokenType::OpenBrace),
+                '}' => Some(TokenType::CloseBrace),
+                ',' => Some(TokenType::Coma),
+                '.' => Some(TokenType::Dot),
+                '-' => Some(TokenType::Minus),
+                '+' => Some(TokenType::Plus),
+                '*' => Some(TokenType::Star),
+                ';' => Some(TokenType::Semicolon),
+                '!' => Some(TokenType::Bang),
+                '<' => Some(TokenType::Less),
+                '>' => Some(TokenType::GreaterEquals),
+                '=' => Some(TokenType::Equals),
                 '/' => {
                     let token_type = if self.next_comment() {
                         TokenType::Comment
                     } else {
                         TokenType::Divide
                     };
-                    self.create_token(token_type)
+                    Some(token_type)
                 }
-                _ => self.get_literal(),
+                _ => None,
+            };
+
+            let token = match token_type {
+                Some(t) => self.create_token(t),
+                None => self.get_literal(),
             };
 
             match token {
