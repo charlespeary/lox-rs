@@ -12,6 +12,8 @@ pub enum ErrorType {
     ExpectedOperator,
     #[display(fmt = "Expected unary operator")]
     ExpectedUnaryOperator,
+    #[display(fmt = "Expected semicolon")]
+    ExpectedSemicolon,
 }
 
 #[derive(Debug, Clone)]

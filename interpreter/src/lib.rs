@@ -36,6 +36,7 @@ pub fn run_code(source_code: &str) {
     let tokens = lexer.scan_tokens();
     match tokens {
         Ok(tokens) => {
+            println!("TOKENS : {:#?}", tokens);
             let mut parser = Parser::new(&tokens);
             let expr = parser.parse_tokens();
             match expr {

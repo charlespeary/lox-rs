@@ -145,9 +145,11 @@ impl Lexer {
 
     fn get_identifier(&mut self) -> Result<Token, LexerError> {
         let mut identifier_literal = self.current.to_string();
-        while let Some(c) = self.get_next() {
-            if c == '\n' || c == ' ' {
+        while let Some(c) = self.peek() {
+            if vec!['\n', ' ', '(', ')', '{', '}'].contains(&c) {
                 break;
+            } else {
+                self.advance();
             }
             identifier_literal.push(c);
             // check if identifier is one of the keywords
@@ -198,10 +200,38 @@ impl Lexer {
                 '+' => Some(TokenType::Plus),
                 '*' => Some(TokenType::Star),
                 ';' => Some(TokenType::Semicolon),
-                '!' => Some(TokenType::Bang),
-                '<' => Some(TokenType::Less),
-                '>' => Some(TokenType::GreaterEquals),
-                '=' => Some(TokenType::Equals),
+                '!' => {
+                    let token_type = if self.next_matches('=') {
+                        TokenType::BangEquals
+                    } else {
+                        TokenType::Bang
+                    };
+                    Some(token_type)
+                }
+                '<' => {
+                    let token_type = if self.next_matches('=') {
+                        TokenType::LessEquals
+                    } else {
+                        TokenType::Less
+                    };
+                    Some(token_type)
+                }
+                '>' => {
+                    let token_type = if self.next_matches('=') {
+                        TokenType::GreaterEquals
+                    } else {
+                        TokenType::Greater
+                    };
+                    Some(token_type)
+                }
+                '=' => {
+                    let token_type = if self.next_matches('=') {
+                        TokenType::Compare
+                    } else {
+                        TokenType::Equals
+                    };
+                    Some(token_type)
+                }
                 '/' => {
                     let token_type = if self.next_comment() {
                         TokenType::Comment

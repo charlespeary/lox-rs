@@ -78,10 +78,6 @@ lazy_static! {
         map.insert("for", TokenType::For);
         map.insert("&&", TokenType::And);
         map.insert("||", TokenType::Or);
-        map.insert("==", TokenType::Equals);
-        map.insert("!=", TokenType::BangEquals);
-        map.insert("<=", TokenType::LessEquals);
-        map.insert(">=", TokenType::GreaterEquals);
         map.insert("fn", TokenType::Function);
         map.insert("return", TokenType::Return);
         map.insert("class", TokenType::Class);

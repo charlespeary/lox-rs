@@ -2,7 +2,7 @@ use super::token::{Literal, TokenType};
 use crate::ast::print_ast;
 use crate::errors::{Error, ErrorType, ParserError};
 use crate::parser::Expression::Unary;
-use crate::statement::Stmt;
+use crate::statement::{Stmt, StmtType};
 use crate::token::Token;
 use crate::token::TokenType::OpenBrace;
 
@@ -78,8 +78,9 @@ pub struct Parser<'a> {
     errors: Vec<ParserError>,
 }
 
-//type ParserResult = Result<Box<Expression>, ErrorType>;
-type ParserResult = Box<Expression>;
+type ParserResult = Result<Box<Expression>, ErrorType>;
+//type ParserResult = Box<Expression>;
+
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
         Parser {
@@ -146,18 +147,6 @@ impl<'a> Parser<'a> {
         false
     }
 
-    pub fn parse_tokens(&mut self) -> Result<ParserResult, Vec<ParserError>> {
-        //        let statements: Vec<Stmt> = Vec::new();
-        //        while (!self.is_at_end()) {
-        //            statements.push(self.statement());
-        //        }
-        let expr = self.expression();
-        if self.is_valid() {
-            return Ok(expr);
-        }
-        Err(self.errors.clone())
-    }
-
     fn error(&mut self, error_type: ErrorType) -> Expression {
         let token = self.get_current().unwrap();
         let error = ParserError {
@@ -171,15 +160,49 @@ impl<'a> Parser<'a> {
         Expression::Error(error_type)
     }
 
-    //    fn statement(&mut self) -> Stmt {
-    //        if self.next_matches(vec![TokenType::])
-    //    }
-    //
-    //    fn print_statement(&mut self) -> Stmt {
-    //
-    //    }
-    //
-    //    fn expression_statement(&mut self) -> Stmt {}
+    pub fn parse_tokens(&mut self) -> Result<Vec<Stmt>, Vec<ParserError>> {
+        let mut statements: Vec<Stmt> = Vec::new();
+        while (!self.is_at_end()) {
+            statements.push(self.statement());
+        }
+        //        let expr = self.expression();
+        if self.is_valid() {
+            return Ok(statements);
+        }
+        Err(self.errors.clone())
+    }
+
+    fn statement(&mut self) -> Result<Stmt, ParserError> {
+        if self.next_matches(vec![TokenType::Print]) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, ParserError> {
+        let expr = self.expression();
+        if self.next_matches(vec![TokenType::Semicolon]) {
+            Stmt {
+                expr,
+                stmt_type: StmtType.Print,
+            }
+        } else {
+            self.error(ErrorType::ExpectedSemicolon)
+        }
+    }
+
+    fn expression_statement(&mut self) -> Stmt {
+        let expr = self.expression();
+        if self.next_matches(vec![TokenType::Semicolon]) {
+            Stmt {
+                expr,
+                stmt_type: StmtType.Expression,
+            }
+        } else {
+            self.error(ErrorType::ExpectedSemicolon)
+        }
+    }
 
     fn expression(&mut self) -> ParserResult {
         self.equality()
