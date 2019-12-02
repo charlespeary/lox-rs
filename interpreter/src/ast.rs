@@ -1,4 +1,4 @@
-use crate::parser::Expression;
+use crate::expr::Expr;
 use std::fmt::Debug;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader};
@@ -7,21 +7,25 @@ fn generate_offset(length: usize) -> String {
     std::iter::repeat(' ').take(length).collect::<String>()
 }
 
-fn has_leafs(expr: &Expression) -> bool {
+fn has_leafs(expr: &Expr) -> bool {
     match expr {
-        Expression::Literal(l) => false,
+        Expr::Literal { value } => false,
         _ => true,
     }
 }
 
-fn calculate_height(expr: &Expression, height: usize) -> usize {
+fn calculate_height(expr: &Expr, height: usize) -> usize {
     match expr {
-        Expression::Binary(left, operator, right) => {
+        Expr::Binary {
+            left,
+            operator,
+            right,
+        } => {
             let left_height = calculate_height(left, height + 1);
             let right_height = calculate_height(right, height + 1);
             std::cmp::max(left_height, right_height)
         }
-        Expression::Grouping(expr) => calculate_height(expr, height + 1),
+        Expr::Grouping { expr } => calculate_height(expr, height + 1),
         _ => height,
     }
 }
@@ -40,23 +44,28 @@ struct Node {
     representation: String,
 }
 
-fn visit_node(expr: Box<Expression>, depth: usize, levels: &mut Vec<Vec<String>>) {
+// TODO: this can be simplified to not use box
+
+fn visit_node(expr: Box<Expr>, depth: usize, levels: &mut Vec<Vec<String>>) {
     let representation = match *expr {
-        Expression::Binary(left, operator, right) => {
+        Expr::Binary {
+            left,
+            operator,
+            right,
+        } => {
             visit_node(left, depth + 1, levels);
             visit_node(right, depth + 1, levels);
             operator.to_string()
         }
-        Expression::Grouping(expr) => {
+        Expr::Grouping { expr } => {
             visit_node(expr, depth + 1, levels);
             String::from("GR")
         }
-        Expression::Unary(token_type, expr) => {
+        Expr::Unary { operator, expr } => {
             visit_node(expr, depth + 1, levels);
             String::from("UN")
         }
-        Expression::Error(err) => String::from("Err"),
-        Expression::Literal(literal) => literal.to_string(),
+        Expr::Literal { value } => value.to_string(),
         _ => format!("{:#?}", expr).to_string(),
     };
     match levels.get(depth) {
@@ -65,7 +74,7 @@ fn visit_node(expr: Box<Expression>, depth: usize, levels: &mut Vec<Vec<String>>
     }
 }
 
-pub fn print_ast(expr: Box<Expression>) {
+pub fn print_ast(expr: Box<Expr>) {
     let height = calculate_height(&(*expr), 1);
     let mut levels: Vec<Vec<String>> = vec![Vec::new(); height + 1];
 

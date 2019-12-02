@@ -2,8 +2,10 @@
 extern crate derive_more;
 #[macro_use]
 extern crate lazy_static;
+
 mod ast;
-mod errors;
+mod error;
+mod expr;
 mod interpreter;
 mod lexer;
 mod parser;
@@ -12,8 +14,8 @@ mod statement;
 mod token;
 mod utils;
 use crate::ast::print_ast;
-use crate::errors::{print_lexer_errors, print_parser_errors, LexerError, ParserError};
-use crate::interpreter::interpret;
+use crate::error::Error;
+use crate::interpreter::Interpreter;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
 use std::io::prelude::*;
@@ -31,23 +33,21 @@ pub fn run_prompt() {
     }
 }
 
-pub fn run_code(source_code: &str) {
+pub fn run_code(source_code: &str) -> Result<(), Error> {
     let mut lexer = Lexer::new(source_code);
-    let tokens = lexer.scan_tokens();
-    match tokens {
+    match lexer.scan_tokens() {
         Ok(tokens) => {
-            println!("TOKENS : {:#?}", tokens);
+            println!("{:#?}", tokens);
             let mut parser = Parser::new(&tokens);
-            let expr = parser.parse_tokens();
-            match expr {
-                Ok(expr) => {
-                    //                    print_ast(expr.clone());
-                    println!("Result : {:#?}", interpret(expr));
-                }
-                Err(e) => print_parser_errors(&e),
-            }
+            let stmts = parser.parse_tokens()?;
+            let mut interpreter = Interpreter::new();
+            interpreter.interpret(&stmts)?;
+            Ok(())
         }
-        Err(errors) => print_lexer_errors(&errors),
+        Err(e) => {
+            println!("{:#?}", e);
+            Err(e[0].clone())
+        }
     }
 }
 

@@ -1,42 +1,131 @@
-use crate::parser::{Expression, Operator, UnaryOperator};
-use crate::runtime_value::{
-    bang_equals, equals, greater, greater_equals, less, less_equals, RuntimeError, Value,
-};
-use crate::token::{Literal, TokenType};
+use crate::error::{Error, ErrorType};
+use crate::expr::{Expr, Visitor as ExprVisitor};
+use crate::runtime_value::Value;
+use crate::statement::{Stmt, Visitor as StmtVisitor};
+use crate::token::{Literal, Token, TokenType};
 
-type InterpreterResult = Result<Value, RuntimeError>;
+pub struct Interpreter;
 
-pub fn interpret(expr: Box<Expression>) -> InterpreterResult {
-    let res = match *expr {
-        Expression::Literal(literal) => Ok(Value::new(literal)),
-        Expression::Binary(left, operator, right) => {
-            let a = interpret(left)?;
-            let b = interpret(right)?;
-            match operator {
-                Operator::Plus => a + b,
-                Operator::Minus => a - b,
-                Operator::Multiply => a * b,
-                Operator::Divide => a / b,
-                Operator::BangEquals => bang_equals(a, b),
-                Operator::Equals => equals(a, b),
-                Operator::Less => less(a, b),
-                Operator::LessEquals => less_equals(a, b),
-                Operator::Greater => greater(a, b),
-                Operator::GreaterEquals => greater_equals(a, b),
-            }
+impl Interpreter {
+    pub fn new() -> Self {
+        Interpreter {}
+    }
+
+    fn evaluate(&mut self, expr: &Expr) -> Result<Value, Error> {
+        expr.accept(self)
+    }
+
+    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), Error> {
+        for stmt in stmts {
+            stmt.accept(self)?;
         }
-        Expression::Grouping(expr) => interpret(expr),
-        Expression::Unary(operator, expr) => {
-            let val = interpret(expr)?;
-            match operator {
-                UnaryOperator::Minus => match val {
-                    Value::Number(val) => Ok(Value::Number(val * -1.0)),
-                    _ => Err(RuntimeError::WrongType),
-                },
-                UnaryOperator::Bang => Ok(Value::Boolean(!val.to_bool())),
-            }
+        Ok(())
+    }
+}
+
+fn error(token: &Token, error_type: ErrorType) -> Result<Value, Error> {
+    Err(Error {
+        token: token.clone(),
+        error_type,
+    })
+}
+
+impl ExprVisitor<Value> for Interpreter {
+    fn visit_binary(
+        &mut self,
+        left: &Expr,
+        operator: &Token,
+        right: &Expr,
+    ) -> Result<Value, Error> {
+        let a = self.evaluate(left)?;
+        let b = self.evaluate(right)?;
+
+        match operator.token_type {
+            TokenType::Plus => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a + b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::String([a, b].concat())),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Minus => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Star => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a * b)),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Divide => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a / b)),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::BangEquals => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a != b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a != b)),
+                (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a != b)),
+                (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Equals => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a == b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a == b)),
+                (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
+                (Value::Null, Value::Null) => Ok(Value::Boolean(true)),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Less => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a < b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() < b.len())),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::LessEquals => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a <= b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() <= b.len())),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Greater => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a > b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() > b.len())),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::GreaterEquals => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a >= b)),
+                (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a.len() >= b.len())),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            _ => unreachable!(),
         }
-        _ => Ok(Value::Null),
-    };
-    res
+    }
+    fn visit_literal(&mut self, literal: &Literal) -> Result<Value, Error> {
+        Ok(Value::new(literal))
+    }
+
+    fn visit_unary(&mut self, operator: &Token, expr: &Expr) -> Result<Value, Error> {
+        let val = self.evaluate(expr)?;
+
+        match operator.token_type {
+            TokenType::Minus => match val {
+                Value::Number(val) => Ok(Value::Number(val * -1.0)),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Bang => Ok(Value::Boolean(!val.to_bool())),
+            _ => unreachable!(),
+        }
+    }
+
+    fn visit_grouping(&mut self, expr: &Expr) -> Result<Value, Error> {
+        self.evaluate(expr)
+    }
+}
+
+impl StmtVisitor<()> for Interpreter {
+    fn visit_print_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
+        let value = self.evaluate(expr)?;
+        println!("{}", value.to_string());
+        Ok(())
+    }
+
+    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
+        self.evaluate(expr)?;
+        Ok(())
+    }
 }

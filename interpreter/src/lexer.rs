@@ -1,5 +1,5 @@
 use super::token::{Literal, Token, TokenType, KEYWORDS};
-use crate::errors::{Error, ErrorType, LexerError};
+use crate::error::{Error, ErrorType};
 use crate::token::Literal::Number;
 use crate::utils::is_numeric;
 use std::iter::Peekable;
@@ -9,11 +9,12 @@ use std::str::Chars;
 pub struct Lexer {
     source_code: Vec<char>,
     pub tokens: Vec<Token>,
-    current: char,
-    index: usize,
-    line_offset: usize,
+    start: usize,
+    current: usize,
     line: usize,
-    errors: Vec<LexerError>,
+    offset_start: usize,
+    offset_current: usize,
+    errors: Vec<Error>,
 }
 
 impl Lexer {
@@ -21,140 +22,135 @@ impl Lexer {
         Lexer {
             source_code: source_code.chars().collect(),
             tokens: Vec::new(),
-            current: ' ',
-            index: 0,
-            line_offset: 0,
+            start: 0,
+            current: 0,
             line: 1,
+            offset_current: 0,
+            offset_start: 0,
             errors: Vec::new(),
         }
     }
 
-    fn advance(&mut self) {
-        self.index += 1;
+    fn advance(&mut self) -> char {
+        self.current += 1;
+        self.offset_current += 1;
+        self.source_code
+            .get(self.current - 1)
+            .expect("Unexpected end of stream")
+            .clone()
     }
 
-    fn get_next(&mut self) -> Option<char> {
-        let item = self.source_code.get(self.index).cloned();
-        if let Some(c) = &item {
-            self.current = c.clone();
-        }
-        self.index += 1;
-        self.line_offset += 1;
-        return item;
+    fn is_not_empty(&self) -> bool {
+        self.source_code.get(self.current).is_some()
     }
 
-    fn peek(&self) -> Option<char> {
-        self.source_code.get(self.index).cloned()
-    }
-
-    fn previous(&self) -> Option<char> {
-        self.source_code.get(self.index - 1).cloned()
+    fn peek(&self, offset: i8) -> char {
+        self.source_code
+            .get((self.current as i8 + offset) as usize)
+            .unwrap_or(&'\0')
+            .clone()
     }
 
     fn next_matches(&mut self, to_match: char) -> bool {
-        if to_match == self.current {
+        if to_match == self.peek(0) {
             self.advance();
             return true;
         }
         false
     }
 
-    fn peek_match(&self, to_match: char) -> bool {
-        if let Some(c) = self.peek() {
-            if c == to_match {
-                return true;
-            }
-        }
-        false
-    }
-
     fn next_line(&mut self) {
         self.line += 1;
+        self.offset_current = 0;
+        self.offset_start = 0;
     }
 
     fn skip_line(&mut self) {
-        while let Some(c) = self.get_next() {
-            if c == '\n' {
-                self.next_line();
-                self.advance();
-                return;
-            }
+        while self.peek(0) != '\n' {
+            self.advance();
         }
+        self.next_line();
     }
 
     fn next_comment(&mut self) -> bool {
-        if let Some(next) = self.peek() {
-            if next == '/' {
-                self.skip_line();
-                return true;
-            }
+        if self.peek(0) == '/' {
+            self.skip_line();
+            return true;
         }
         false
     }
 
-    fn has_next(&self) -> bool {
-        self.peek().is_some()
-    }
-
-    fn raise_error(&mut self, error_type: ErrorType) -> Result<Token, LexerError> {
-        Err(LexerError {
-            error: Error {
-                line_offset: self.line_offset,
+    fn raise_error(&mut self, error_type: ErrorType) -> Result<Token, Error> {
+        Err(Error {
+            token: Token {
+                token_type: TokenType::Invalid,
+                start: self.offset_start + 1,
+                end: self.offset_current,
                 line: self.line,
-                error_type,
             },
-            literal: self.current,
+            error_type,
         })
     }
 
-    fn create_token(&self, token_type: TokenType) -> Result<Token, LexerError> {
+    fn create_token(&self, token_type: TokenType) -> Result<Token, Error> {
         Ok(Token {
             line: self.line,
-            line_offset: self.line_offset,
+            start: self.offset_start + 1,
+            end: self.offset_current,
             token_type,
         })
     }
 
-    fn get_string(&mut self) -> Result<Token, LexerError> {
-        let mut value = String::new();
-        while let Some(c) = self.get_next() {
+    fn get_slice(&self) -> String {
+        self.source_code
+            .get(self.start..self.current)
+            .expect("Unexpected end of stream")
+            .into_iter()
+            .collect::<String>()
+    }
+
+    fn get_string(&mut self) -> Result<Token, Error> {
+        while self.is_not_empty() {
+            let c = self.advance();
             if c == '"' {
+                let value = self.get_slice();
                 return self.create_token(TokenType::Literal(Literal::String(value)));
-            } else {
-                value.push(c);
             }
         }
         self.raise_error(ErrorType::StringNotClosed)
     }
 
-    fn get_number(&mut self) -> Result<Token, LexerError> {
-        let mut value = self.current.to_string();
-        while let Some(c) = self.peek() {
-            if is_numeric(c) {
-                value.push(c);
-                self.advance();
-            } else {
-                break;
-            }
+    fn omit_number(&mut self) {
+        while self.peek(0).is_digit(10) {
+            self.advance();
         }
-        match value.parse::<f64>() {
+    }
+
+    fn get_number(&mut self) -> Result<Token, Error> {
+        self.omit_number();
+
+        if self.peek(0) == '.' && self.peek(1).is_digit(10) {
+            self.omit_number();
+        }
+
+        let num = self.get_slice().parse::<f64>();
+
+        match num {
             Ok(value) => self.create_token(TokenType::Literal(Literal::Number(value))),
             _ => self.raise_error(ErrorType::UnexpectedCharacter),
         }
     }
 
-    fn get_identifier(&mut self) -> Result<Token, LexerError> {
-        let mut identifier_literal = self.current.to_string();
-        while let Some(c) = self.peek() {
-            if vec!['\n', ' ', '(', ')', '{', '}'].contains(&c) {
-                break;
-            } else {
-                self.advance();
-            }
-            identifier_literal.push(c);
+    fn get_identifier(&mut self) -> Result<Token, Error> {
+        let mut identifier_literal = String::new();
+
+        while !vec!['\n', ' ', '(', ')', '{', '}'].contains(&self.peek(0)) {
+            self.advance();
             // check if identifier is one of the keywords
-            let identifier = KEYWORDS.get::<str>(&identifier_literal);
-            if let Some(token_type) = identifier {
+            identifier_literal = self.get_slice();
+            let keyword = KEYWORDS.get::<str>(&identifier_literal);
+
+            if let Some(token_type) = keyword {
                 return self.create_token(token_type.clone());
             }
         }
@@ -162,11 +158,12 @@ impl Lexer {
         self.create_token(TokenType::Literal(Literal::Identifier(identifier_literal)))
     }
 
-    fn get_literal(&mut self) -> Result<Token, LexerError> {
-        let c = self.current;
+    fn get_literal(&mut self) -> Result<Token, Error> {
+        let c = self.peek(-1);
+
         if c == '"' {
             self.get_string()
-        } else if is_numeric(c) {
+        } else if c.is_digit(10) {
             self.get_number()
         } else if c.is_alphanumeric() {
             self.get_identifier()
@@ -175,9 +172,14 @@ impl Lexer {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Vec<LexerError>> {
-        while let Some(c) = self.get_next() {
+    pub fn scan_tokens(&mut self) -> Result<Vec<Token>, Vec<Error>> {
+        while self.is_not_empty() {
             // early match to discard items that won't return token type
+            self.start = self.current;
+            self.offset_start = self.offset_current;
+
+            let c = self.advance();
+            println!("CHAR: {} OFFSET: {}", c, self.offset_current);
             match c {
                 ' ' | '\t' | '\r' => {
                     continue;
@@ -258,11 +260,114 @@ impl Lexer {
             }
         }
 
-        self.create_token(TokenType::EOF);
+        self.tokens.push(self.create_token(TokenType::EOF).unwrap());
 
         if self.errors.len() > 0 {
             return Err(self.errors.clone());
         }
         Ok(self.tokens.clone())
+    }
+}
+
+mod tests {
+    use crate::lexer::Lexer;
+    use crate::token::{Literal, Token, TokenType};
+    #[cfg(test)]
+    use pretty_assertions::{assert_eq, assert_ne};
+
+    #[test]
+    fn parse_literals() {
+        let code = "((10 * 5) + 5) - 3 == 20";
+        let mut lexer = Lexer::new(code);
+        let tokens = lexer.scan_tokens().unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token {
+                    line: 1,
+                    start: 1,
+                    end: 1,
+                    token_type: TokenType::OpenParenthesis
+                },
+                Token {
+                    line: 1,
+                    start: 2,
+                    end: 2,
+                    token_type: TokenType::OpenParenthesis
+                },
+                Token {
+                    line: 1,
+                    start: 3,
+                    end: 4,
+                    token_type: TokenType::Literal(Literal::Number(10.0)),
+                },
+                Token {
+                    line: 1,
+                    start: 6,
+                    end: 6,
+                    token_type: TokenType::Star
+                },
+                Token {
+                    line: 1,
+                    start: 8,
+                    end: 8,
+                    token_type: TokenType::Literal(Literal::Number(5.0))
+                },
+                Token {
+                    line: 1,
+                    start: 9,
+                    end: 9,
+                    token_type: TokenType::CloseParenthesis
+                },
+                Token {
+                    line: 1,
+                    start: 11,
+                    end: 11,
+                    token_type: TokenType::Plus
+                },
+                Token {
+                    line: 1,
+                    start: 13,
+                    end: 13,
+                    token_type: TokenType::Literal(Literal::Number(5.0))
+                },
+                Token {
+                    line: 1,
+                    start: 14,
+                    end: 14,
+                    token_type: TokenType::CloseParenthesis
+                },
+                Token {
+                    line: 1,
+                    start: 16,
+                    end: 16,
+                    token_type: TokenType::Minus
+                },
+                Token {
+                    line: 1,
+                    start: 18,
+                    end: 18,
+                    token_type: TokenType::Literal(Literal::Number(3.0))
+                },
+                Token {
+                    line: 1,
+                    start: 20,
+                    end: 21,
+                    token_type: TokenType::Compare,
+                },
+                Token {
+                    line: 1,
+                    start: 23,
+                    end: 24,
+                    token_type: TokenType::Literal(Literal::Number(20.0))
+                },
+                Token {
+                    line: 1,
+                    start: 23,
+                    end: 24,
+                    token_type: TokenType::EOF
+                }
+            ]
+        )
     }
 }

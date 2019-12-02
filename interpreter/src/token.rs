@@ -1,15 +1,18 @@
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, Clone, Display, PartialEq)]
 pub enum Literal {
     String(String),
     Number(f64),
     Identifier(String),
+    Null,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Display)]
 pub enum TokenType {
     EOF,
+    Invalid,
     OpenParenthesis,
     CloseParenthesis,
     OpenBrace,
@@ -53,15 +56,30 @@ pub enum TokenType {
 pub struct Token {
     pub token_type: TokenType,
     pub line: usize,
-    pub line_offset: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+impl fmt::Display for Token {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str(
+            format!(
+                "Token type: {} Line: {}:{}-{}",
+                self.token_type, self.line, self.start, self.end
+            )
+            .as_str(),
+        )?;
+        Ok(())
+    }
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, line: usize, line_offset: usize) -> Self {
+    pub fn new(token_type: TokenType, line: usize, start: usize, end: usize) -> Self {
         Token {
             token_type,
             line,
-            line_offset,
+            start,
+            end,
         }
     }
 }
@@ -85,6 +103,7 @@ lazy_static! {
         map.insert("this", TokenType::This);
         map.insert("null", TokenType::Null);
         map.insert("print", TokenType::Print);
+        map.insert("null", TokenType::Literal(Literal::Null));
         map
     };
 }

@@ -1,3 +1,5 @@
+use crate::token::Token;
+
 #[derive(Debug, Clone, Display)]
 pub enum ErrorType {
     #[display(fmt = "String not closed")]
@@ -14,30 +16,12 @@ pub enum ErrorType {
     ExpectedUnaryOperator,
     #[display(fmt = "Expected semicolon")]
     ExpectedSemicolon,
+    #[display(fmt = "Unexpected type mismatch")]
+    WrongType,
 }
 
 #[derive(Debug, Clone)]
 pub struct Error {
-    pub line: usize,
-    pub line_offset: usize,
+    pub token: Token,
     pub error_type: ErrorType,
-}
-
-#[derive(Debug, Clone)]
-pub struct LexerError {
-    pub error: Error,
-    pub literal: char,
-}
-
-#[derive(Debug, Clone)]
-pub struct ParserError {
-    pub error: Error,
-}
-
-pub fn print_lexer_errors(errors: &Vec<LexerError>) {
-    println!("{:#?}", errors);
-}
-
-pub fn print_parser_errors(errors: &Vec<ParserError>) {
-    println!("{:#?}", errors);
 }
