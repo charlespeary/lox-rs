@@ -44,9 +44,9 @@ impl Lexer {
         self.source_code.get(self.current).is_some()
     }
 
-    fn peek(&self, offset: i8) -> char {
+    fn peek(&self, offset: i16) -> char {
         self.source_code
-            .get((self.current as i8 + offset) as usize)
+            .get((self.current as i16 + offset) as usize)
             .unwrap_or(&'\0')
             .clone()
     }
@@ -65,6 +65,7 @@ impl Lexer {
         self.offset_start = 0;
     }
 
+    // TODO: while skipping line and there is no new line at the end the program crashes
     fn skip_line(&mut self) {
         while self.peek(0) != '\n' {
             self.advance();
@@ -143,17 +144,19 @@ impl Lexer {
 
     fn get_identifier(&mut self) -> Result<Token, Error> {
         let mut identifier_literal = String::new();
-
-        while !vec!['\n', ' ', '(', ')', '{', '}'].contains(&self.peek(0)) {
-            self.advance();
+        loop {
             // check if identifier is one of the keywords
             identifier_literal = self.get_slice();
             let keyword = KEYWORDS.get::<str>(&identifier_literal);
-
             if let Some(token_type) = keyword {
                 return self.create_token(token_type.clone());
+            } else if !self.peek(0).is_alphabetic() {
+                break;
+            } else {
+                self.advance();
             }
         }
+
         // if not return it as an identifier
         self.create_token(TokenType::Literal(Literal::Identifier(identifier_literal)))
     }
@@ -179,7 +182,6 @@ impl Lexer {
             self.offset_start = self.offset_current;
 
             let c = self.advance();
-            println!("CHAR: {} OFFSET: {}", c, self.offset_current);
             match c {
                 ' ' | '\t' | '\r' => {
                     continue;
@@ -187,6 +189,11 @@ impl Lexer {
                 '\n' => {
                     self.next_line();
                     continue;
+                }
+                '/' => {
+                    if self.next_comment() {
+                        continue;
+                    }
                 }
                 _ => (),
             }
@@ -230,18 +237,11 @@ impl Lexer {
                     let token_type = if self.next_matches('=') {
                         TokenType::Compare
                     } else {
-                        TokenType::Equals
+                        TokenType::Assign
                     };
                     Some(token_type)
                 }
-                '/' => {
-                    let token_type = if self.next_comment() {
-                        TokenType::Comment
-                    } else {
-                        TokenType::Divide
-                    };
-                    Some(token_type)
-                }
+                '/' => Some(TokenType::Divide),
                 _ => None,
             };
 

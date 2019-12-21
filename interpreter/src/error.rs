@@ -18,6 +18,16 @@ pub enum ErrorType {
     ExpectedSemicolon,
     #[display(fmt = "Unexpected type mismatch")]
     WrongType,
+    #[display(fmt = "Expected variable to have an identifier")]
+    ExpectedIdentifier,
+    #[display(fmt = "Expected assign after identifier")]
+    ExpectedAssign,
+    #[display(fmt = "Variable is undefined")]
+    UndefinedVariable,
+    #[display(fmt = "Invalid Assignment")]
+    InvalidAssignment,
+    #[display(fmt = "Expected close brace at the end of the block")]
+    ExpectedBlockEnd,
 }
 
 #[derive(Debug, Clone)]

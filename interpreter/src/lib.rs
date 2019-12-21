@@ -4,6 +4,7 @@ extern crate derive_more;
 extern crate lazy_static;
 
 mod ast;
+mod environment;
 mod error;
 mod expr;
 mod interpreter;
@@ -37,7 +38,6 @@ pub fn run_code(source_code: &str) -> Result<(), Error> {
     let mut lexer = Lexer::new(source_code);
     match lexer.scan_tokens() {
         Ok(tokens) => {
-            println!("{:#?}", tokens);
             let mut parser = Parser::new(&tokens);
             let stmts = parser.parse_tokens()?;
             let mut interpreter = Interpreter::new();
@@ -45,7 +45,7 @@ pub fn run_code(source_code: &str) -> Result<(), Error> {
             Ok(())
         }
         Err(e) => {
-            println!("{:#?}", e);
+            println!("ERR");
             Err(e[0].clone())
         }
     }
@@ -59,7 +59,7 @@ pub fn run_file(path: &str) {
             buf_reader
                 .read_to_string(&mut source_code)
                 .expect("This file is empty!");
-            run_code(&source_code);
+            println!("{:#?}", run_code(&source_code));
         }
         _ => println!("This file doesn't exist!"),
     }

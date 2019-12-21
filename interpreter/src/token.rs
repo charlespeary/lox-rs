@@ -31,7 +31,7 @@ pub enum TokenType {
     Greater,
     GreaterEquals,
     Compare,
-    Equals,
+    Assign,
     Comment,
     If,
     Else,

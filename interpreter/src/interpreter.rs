@@ -1,14 +1,19 @@
+use crate::environment::Environment;
 use crate::error::{Error, ErrorType};
 use crate::expr::{Expr, Visitor as ExprVisitor};
 use crate::runtime_value::Value;
 use crate::statement::{Stmt, Visitor as StmtVisitor};
 use crate::token::{Literal, Token, TokenType};
 
-pub struct Interpreter;
+pub struct Interpreter {
+    env: Environment,
+}
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter {}
+        Interpreter {
+            env: Environment::new(None),
+        }
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<Value, Error> {
@@ -65,7 +70,7 @@ impl ExprVisitor<Value> for Interpreter {
                 (Value::Null, Value::Null) => Ok(Value::Boolean(false)),
                 _ => error(operator, ErrorType::WrongType),
             },
-            TokenType::Equals => match (a, b) {
+            TokenType::Compare => match (a, b) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Boolean(a == b)),
                 (Value::String(a), Value::String(b)) => Ok(Value::Boolean(a == b)),
                 (Value::Boolean(a), Value::Boolean(b)) => Ok(Value::Boolean(a == b)),
@@ -95,6 +100,7 @@ impl ExprVisitor<Value> for Interpreter {
             _ => unreachable!(),
         }
     }
+
     fn visit_literal(&mut self, literal: &Literal) -> Result<Value, Error> {
         Ok(Value::new(literal))
     }
@@ -115,6 +121,29 @@ impl ExprVisitor<Value> for Interpreter {
     fn visit_grouping(&mut self, expr: &Expr) -> Result<Value, Error> {
         self.evaluate(expr)
     }
+
+    fn visit_var(&mut self, name: &String, token: &Token) -> Result<Value, Error> {
+        let var = self.env.get(name);
+        // not sure if we should clone anything at all here
+        match var {
+            Some(val) => Ok(val.clone()),
+            None => error(token, ErrorType::UndefinedVariable),
+        }
+    }
+
+    fn visit_assignment(
+        &mut self,
+        name: &String,
+        expr: &Expr,
+        token: &Token,
+    ) -> Result<Value, Error> {
+        let value = self.evaluate(expr)?;
+        if let Some(_) = self.env.define_or_update(name, &value) {
+            Ok(value)
+        } else {
+            error(token, ErrorType::UndefinedVariable)
+        }
+    }
 }
 
 impl StmtVisitor<()> for Interpreter {
@@ -126,6 +155,21 @@ impl StmtVisitor<()> for Interpreter {
 
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
         self.evaluate(expr)?;
+        Ok(())
+    }
+
+    fn visit_var(&mut self, name: &String, expr: &Expr) -> Result<(), Error> {
+        let value = self.evaluate(expr)?;
+        self.env.define_or_update(name, &value);
+        Ok(())
+    }
+
+    fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<(), Error> {
+        // TODO: figure out if I can avoid the clones
+        let prev_env = self.env.clone();
+        self.env = Environment::new(Some(Box::new(self.env.clone())));
+        self.interpret(statements);
+        self.env = prev_env;
         Ok(())
     }
 }

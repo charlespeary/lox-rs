@@ -1,9 +1,12 @@
 use super::token::{Literal, TokenType};
 use crate::ast::print_ast;
+use crate::error::ErrorType::ExpectedIdentifier;
 use crate::error::{Error, ErrorType};
 use crate::expr::Expr;
 use crate::statement::Stmt;
 use crate::token::Token;
+use crate::token::TokenType::Var;
+use std::mem;
 
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
@@ -50,10 +53,9 @@ impl<'a> Parser<'a> {
         self.peek().token_type == TokenType::EOF
     }
 
-    fn consume(&mut self, expected: TokenType, error_type: ErrorType) -> Result<(), Error> {
-        if self.peek().token_type == expected {
-            self.advance();
-            Ok(())
+    fn consume(&mut self, expected: &TokenType, error_type: ErrorType) -> Result<&Token, Error> {
+        if mem::discriminant((&self.peek().token_type)) == mem::discriminant(expected) {
+            Ok((self.advance()))
         } else {
             Err(Error {
                 token: self.advance().clone(),
@@ -62,28 +64,77 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_tokens(&mut self) -> Result<Vec<Stmt>, Error> {
-        let mut statements: Vec<Stmt> = Vec::new();
-
-        while !self.is_at_end() {
-            let stmt = self.statement()?;
-            statements.push(stmt);
-        }
-
-        return Ok(statements);
-    }
-
-    fn error<T>(&mut self, error_type: ErrorType) -> Result<T, Error> {
-        let token = self.previous();
+    fn error<T>(&mut self, error_type: ErrorType, token: &Token) -> Result<T, Error> {
         Err(Error {
             token: token.clone(),
             error_type,
         })
     }
 
+    pub fn parse_tokens(&mut self) -> Result<Vec<Stmt>, Error> {
+        let mut statements: Vec<Stmt> = Vec::new();
+
+        while !self.is_at_end() {
+            let stmt = self.declaration()?;
+            statements.push(stmt);
+        }
+
+        return Ok(statements);
+    }
+
+    fn get_identifier(&mut self) -> Option<&String> {
+        let token_type = &self.peek().token_type;
+        match token_type {
+            TokenType::Literal(literal) => match literal {
+                Literal::Identifier(identifier) => Some(&identifier),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn block(&mut self) -> Result<Stmt, Error> {
+        let mut stmts: Vec<Stmt> = Vec::new();
+
+        while &self.peek().token_type != &TokenType::CloseBrace && !self.is_at_end() {
+            let stmt = self.declaration()?;
+            stmts.push(stmt);
+        }
+
+        self.consume(&TokenType::CloseBrace, ErrorType::ExpectedBlockEnd)?;
+
+        Ok(Stmt::Block { stmts })
+    }
+
+    fn declaration(&mut self) -> StmtResult {
+        if self.next_matches(vec![TokenType::Var]) {
+            let name = if let TokenType::Literal(Literal::Identifier(identifier)) = &self
+                .consume(
+                    &TokenType::Literal(Literal::Identifier(String::from("%"))),
+                    ErrorType::ExpectedIdentifier,
+                )?
+                .token_type
+            {
+                Some(identifier.clone())
+            } else {
+                None
+            }
+            .expect("Identifier shouldn't ever be None");
+
+            self.consume(&TokenType::Assign, ErrorType::ExpectedAssign)?;
+            let expr = self.expr()?;
+            self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+            return Ok(Stmt::Var { name, value: expr });
+        } else {
+            self.statement()
+        }
+    }
+
     fn statement(&mut self) -> StmtResult {
         if self.next_matches(vec![TokenType::Print]) {
             self.print_statement()
+        } else if self.next_matches(vec![TokenType::OpenBrace]) {
+            self.block()
         } else {
             self.expr_statement()
         }
@@ -91,23 +142,43 @@ impl<'a> Parser<'a> {
 
     fn print_statement(&mut self) -> StmtResult {
         let expr = self.expr()?;
-        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
         Ok(Stmt::Print { expr })
     }
 
     fn expr_statement(&mut self) -> StmtResult {
         let expr = self.expr()?;
-        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
         Ok(Stmt::Expr { expr })
     }
 
     fn expr(&mut self) -> ExprResult {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> ExprResult {
+        let mut expr = self.equality()?;
+        if self.next_matches(vec![TokenType::Assign]) {
+            let token = self.previous().clone();
+            let value = self.assignment()?;
+
+            if let Expr::Var { name, token } = expr {
+                return Ok(Expr::Assign {
+                    name,
+                    expr: Box::new(value),
+                    token,
+                });
+            }
+
+            self.error::<Expr>(ErrorType::InvalidAssignment, &token);
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> ExprResult {
         let mut expr = self.comparison()?;
-        while self.next_matches(vec![TokenType::Equals, TokenType::BangEquals]) {
+        while self.next_matches(vec![TokenType::Compare, TokenType::BangEquals]) {
             let operator = self.previous().clone();
             let right = self.comparison()?;
             expr = Expr::Binary {
@@ -181,17 +252,27 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> ExprResult {
         let token = self.advance();
         match &token.token_type {
-            TokenType::Literal(literal) => Ok(Expr::Literal {
-                value: literal.clone(),
-            }),
+            TokenType::Literal(literal) => match literal {
+                Literal::Identifier(name) => Ok(Expr::Var {
+                    name: name.clone(),
+                    token: token.clone(),
+                }),
+                _ => Ok(Expr::Literal {
+                    value: literal.clone(),
+                }),
+            },
             TokenType::OpenParenthesis => {
                 let body = self.expr()?;
-                self.consume(TokenType::CloseParenthesis, ErrorType::UnclosedParenthesis)?;
+                self.consume(&TokenType::CloseParenthesis, ErrorType::UnclosedParenthesis)?;
                 Ok(Expr::Grouping {
                     expr: Box::new(body),
                 })
             }
-            _ => self.error::<Expr>(ErrorType::UnparsableExpression),
+            _ => {
+                // TODO: figure out better name
+                let _token = token.clone();
+                self.error::<Expr>(ErrorType::UnparsableExpression, &_token)
+            }
         }
     }
 }
