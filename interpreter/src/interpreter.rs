@@ -172,4 +172,19 @@ impl StmtVisitor<()> for Interpreter {
         self.env = prev_env;
         Ok(())
     }
+
+    fn visit_if_stmt(
+        &mut self,
+        condition: &Expr,
+        then_body: &Stmt,
+        else_body: &Stmt,
+    ) -> Result<(), Error> {
+        let cond = self.evaluate(condition)?.to_bool();
+        if cond {
+            then_body.accept(self)?;
+        } else {
+            else_body.accept(self)?;
+        }
+        Ok(())
+    }
 }

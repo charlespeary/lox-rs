@@ -8,6 +8,10 @@ pub enum ErrorType {
     UnexpectedCharacter,
     #[display(fmt = "Unparsable expression")]
     UnparsableExpression,
+    #[display(fmt = "Expected open parenthesis")]
+    ExpectedOpenParenthesis,
+    #[display(fmt = "Expected close parenthesis")]
+    ExpectedCloseParenthesis,
     #[display(fmt = "Unclosed parenthesis")]
     UnclosedParenthesis,
     #[display(fmt = "Expected operator")]
@@ -28,6 +32,8 @@ pub enum ErrorType {
     InvalidAssignment,
     #[display(fmt = "Expected close brace at the end of the block")]
     ExpectedBlockEnd,
+    #[display(fmt = "Expected if statement to have an else block")]
+    ExpectedElseStatement,
 }
 
 #[derive(Debug, Clone)]

@@ -131,13 +131,42 @@ impl<'a> Parser<'a> {
     }
 
     fn statement(&mut self) -> StmtResult {
+        // TODO: maybe a match would be prettier here
         if self.next_matches(vec![TokenType::Print]) {
             self.print_statement()
         } else if self.next_matches(vec![TokenType::OpenBrace]) {
             self.block()
+        } else if self.next_matches(vec![TokenType::If]) {
+            self.if_statement()
         } else {
             self.expr_statement()
         }
+    }
+
+    fn if_statement(&mut self) -> StmtResult {
+        self.consume(
+            &TokenType::OpenParenthesis,
+            ErrorType::ExpectedOpenParenthesis,
+        )?;
+        println!("had an open parenthesis");
+        let condition = self.expr()?;
+        println!("cond: {:#?}", condition);
+        self.consume(
+            &TokenType::CloseParenthesis,
+            ErrorType::ExpectedCloseParenthesis,
+        )?;
+        println!("had a close parenthesis");
+        let then_body = Box::new(self.statement()?);
+        println!("then {:#?}", then_body);
+        self.consume(&TokenType::Else, ErrorType::ExpectedElseStatement)?;
+        let else_body = Box::new(self.statement()?);
+        println!("else {:#?}", else_body);
+
+        Ok(Stmt::If {
+            condition,
+            then_body,
+            else_body,
+        })
     }
 
     fn print_statement(&mut self) -> StmtResult {
@@ -199,6 +228,7 @@ impl<'a> Parser<'a> {
             TokenType::GreaterEquals,
         ]) {
             let operator = self.previous().clone();
+
             let right = self.addition()?;
             expr = Expr::Binary {
                 left: Box::new(expr),

@@ -7,14 +7,34 @@ pub trait Visitor<R> {
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<R, Error>;
     fn visit_var(&mut self, name: &String, value: &Expr) -> Result<R, Error>;
     fn visit_block_stmt(&mut self, stms: &Vec<Stmt>) -> Result<R, Error>;
+    fn visit_if_stmt(
+        &mut self,
+        condition: &Expr,
+        then_body: &Stmt,
+        else_body: &Stmt,
+    ) -> Result<R, Error>;
 }
 
 #[derive(Debug)]
 pub enum Stmt {
-    Print { expr: Expr },
-    Expr { expr: Expr },
-    Var { name: String, value: Expr },
-    Block { stmts: Vec<Stmt> },
+    Print {
+        expr: Expr,
+    },
+    Expr {
+        expr: Expr,
+    },
+    Var {
+        name: String,
+        value: Expr,
+    },
+    Block {
+        stmts: Vec<Stmt>,
+    },
+    If {
+        condition: Expr,
+        then_body: Box<Stmt>,
+        else_body: Box<Stmt>,
+    },
 }
 
 impl Stmt {
@@ -24,6 +44,11 @@ impl Stmt {
             Stmt::Expr { expr } => visitor.visit_expr_stmt(expr),
             Stmt::Var { name, value } => visitor.visit_var(name, value),
             Stmt::Block { stmts } => visitor.visit_block_stmt(stmts),
+            Stmt::If {
+                condition,
+                then_body,
+                else_body,
+            } => visitor.visit_if_stmt(condition, then_body, else_body),
         }
     }
 }
