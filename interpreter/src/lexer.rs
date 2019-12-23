@@ -114,7 +114,9 @@ impl Lexer {
         while self.is_not_empty() {
             let c = self.advance();
             if c == '"' {
-                let value = self.get_slice();
+                let slice = self.get_slice();
+                let value = slice.chars().skip(1).take(&slice.len() - 2).collect();
+
                 return self.create_token(TokenType::Literal(Literal::String(value)));
             }
         }
@@ -158,7 +160,7 @@ impl Lexer {
         }
 
         // if not return it as an identifier
-        self.create_token(TokenType::Literal(Literal::Identifier(identifier_literal)))
+        self.create_token(TokenType::Identifier(identifier_literal))
     }
 
     fn get_literal(&mut self) -> Result<Token, Error> {

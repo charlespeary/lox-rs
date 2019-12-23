@@ -16,8 +16,8 @@ impl Value {
         match literal {
             Literal::Number(val) => Value::Number(val.clone()),
             Literal::String(val) => Value::String(val.clone()),
-            Literal::Identifier(val) => Value::String(val.clone()),
             Literal::Null => Value::Null,
+            Literal::Bool(val) => Value::Boolean(val.clone()),
         }
     }
 

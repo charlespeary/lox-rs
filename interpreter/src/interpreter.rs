@@ -4,15 +4,17 @@ use crate::expr::{Expr, Visitor as ExprVisitor};
 use crate::runtime_value::Value;
 use crate::statement::{Stmt, Visitor as StmtVisitor};
 use crate::token::{Literal, Token, TokenType};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Interpreter {
-    env: Environment,
+    env: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
-            env: Environment::new(None),
+            env: Rc::new(RefCell::new(Environment::new())),
         }
     }
 
@@ -123,7 +125,7 @@ impl ExprVisitor<Value> for Interpreter {
     }
 
     fn visit_var(&mut self, name: &String, token: &Token) -> Result<Value, Error> {
-        let var = self.env.get(name);
+        let var = self.env.borrow().get(name);
         // not sure if we should clone anything at all here
         match var {
             Some(val) => Ok(val.clone()),
@@ -138,11 +140,34 @@ impl ExprVisitor<Value> for Interpreter {
         token: &Token,
     ) -> Result<Value, Error> {
         let value = self.evaluate(expr)?;
-        if let Some(_) = self.env.define_or_update(name, &value) {
-            Ok(value)
+        if let Some(val) = self.env.borrow_mut().define_or_update(name, &value) {
+            Ok(val)
         } else {
             error(token, ErrorType::UndefinedVariable)
         }
+    }
+
+    fn visit_logical(
+        &mut self,
+        left: &Expr,
+        operator: &Token,
+        right: &Expr,
+    ) -> Result<Value, Error> {
+        // TODO: this needs more testing
+        let left_val = self.evaluate(left)?;
+        let right_val = self.evaluate(right)?;
+        let res = match operator.token_type {
+            TokenType::Or => {
+                if left_val.to_bool() {
+                    left_val
+                } else {
+                    right_val
+                }
+            }
+            TokenType::And => Value::Boolean(left_val.to_bool() && right_val.to_bool()),
+            _ => right_val,
+        };
+        Ok(res)
     }
 }
 
@@ -160,14 +185,14 @@ impl StmtVisitor<()> for Interpreter {
 
     fn visit_var(&mut self, name: &String, expr: &Expr) -> Result<(), Error> {
         let value = self.evaluate(expr)?;
-        self.env.define_or_update(name, &value);
+        self.env.borrow_mut().define_or_update(name, &value);
         Ok(())
     }
 
     fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<(), Error> {
         // TODO: figure out if I can avoid the clones
-        let prev_env = self.env.clone();
-        self.env = Environment::new(Some(Box::new(self.env.clone())));
+        let mut prev_env = self.env.clone();
+        self.env = Rc::new(RefCell::new(Environment::from(&self.env)));
         self.interpret(statements);
         self.env = prev_env;
         Ok(())
@@ -184,6 +209,17 @@ impl StmtVisitor<()> for Interpreter {
             then_body.accept(self)?;
         } else {
             else_body.accept(self)?;
+        }
+        Ok(())
+    }
+
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<(), Error> {
+        loop {
+            if self.evaluate(condition)?.to_bool() {
+                body.accept(self)?;
+            } else {
+                break;
+            }
         }
         Ok(())
     }

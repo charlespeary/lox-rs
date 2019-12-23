@@ -82,17 +82,6 @@ impl<'a> Parser<'a> {
         return Ok(statements);
     }
 
-    fn get_identifier(&mut self) -> Option<&String> {
-        let token_type = &self.peek().token_type;
-        match token_type {
-            TokenType::Literal(literal) => match literal {
-                Literal::Identifier(identifier) => Some(&identifier),
-                _ => None,
-            },
-            _ => None,
-        }
-    }
-
     fn block(&mut self) -> Result<Stmt, Error> {
         let mut stmts: Vec<Stmt> = Vec::new();
 
@@ -108,9 +97,9 @@ impl<'a> Parser<'a> {
 
     fn declaration(&mut self) -> StmtResult {
         if self.next_matches(vec![TokenType::Var]) {
-            let name = if let TokenType::Literal(Literal::Identifier(identifier)) = &self
+            let name = if let TokenType::Identifier(identifier) = &self
                 .consume(
-                    &TokenType::Literal(Literal::Identifier(String::from("%"))),
+                    &TokenType::Identifier(String::from("%")),
                     ErrorType::ExpectedIdentifier,
                 )?
                 .token_type
@@ -138,9 +127,26 @@ impl<'a> Parser<'a> {
             self.block()
         } else if self.next_matches(vec![TokenType::If]) {
             self.if_statement()
+        } else if self.next_matches(vec![TokenType::While]) {
+            self.while_statement()
         } else {
             self.expr_statement()
         }
+    }
+
+    fn while_statement(&mut self) -> StmtResult {
+        self.consume(
+            &TokenType::OpenParenthesis,
+            ErrorType::ExpectedCloseParenthesis,
+        )?;
+        let condition = self.expr()?;
+        self.consume(
+            &TokenType::CloseParenthesis,
+            ErrorType::ExpectedCloseParenthesis,
+        )?;
+        let body = Box::new(self.statement()?);
+
+        Ok(Stmt::While { condition, body })
     }
 
     fn if_statement(&mut self) -> StmtResult {
@@ -148,19 +154,14 @@ impl<'a> Parser<'a> {
             &TokenType::OpenParenthesis,
             ErrorType::ExpectedOpenParenthesis,
         )?;
-        println!("had an open parenthesis");
         let condition = self.expr()?;
-        println!("cond: {:#?}", condition);
         self.consume(
             &TokenType::CloseParenthesis,
             ErrorType::ExpectedCloseParenthesis,
         )?;
-        println!("had a close parenthesis");
         let then_body = Box::new(self.statement()?);
-        println!("then {:#?}", then_body);
         self.consume(&TokenType::Else, ErrorType::ExpectedElseStatement)?;
         let else_body = Box::new(self.statement()?);
-        println!("else {:#?}", else_body);
 
         Ok(Stmt::If {
             condition,
@@ -186,7 +187,7 @@ impl<'a> Parser<'a> {
     }
 
     fn assignment(&mut self) -> ExprResult {
-        let mut expr = self.equality()?;
+        let mut expr = self.or()?;
         if self.next_matches(vec![TokenType::Assign]) {
             let token = self.previous().clone();
             let value = self.assignment()?;
@@ -203,6 +204,34 @@ impl<'a> Parser<'a> {
         }
 
         Ok(expr)
+    }
+
+    fn or(&mut self) -> ExprResult {
+        let mut expr = self.and()?;
+        while self.next_matches(vec![TokenType::Or]) {
+            let operator = self.previous().clone();
+            let right = self.and()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            };
+        }
+        return Ok(expr);
+    }
+
+    fn and(&mut self) -> ExprResult {
+        let mut expr = self.equality()?;
+        while self.next_matches(vec![TokenType::And]) {
+            let operator = self.previous().clone();
+            let right = self.equality()?;
+            expr = Expr::Logical {
+                left: Box::new(expr),
+                operator,
+                right: Box::new(right),
+            };
+        }
+        return Ok(expr);
     }
 
     fn equality(&mut self) -> ExprResult {
@@ -282,15 +311,13 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> ExprResult {
         let token = self.advance();
         match &token.token_type {
-            TokenType::Literal(literal) => match literal {
-                Literal::Identifier(name) => Ok(Expr::Var {
-                    name: name.clone(),
-                    token: token.clone(),
-                }),
-                _ => Ok(Expr::Literal {
-                    value: literal.clone(),
-                }),
-            },
+            TokenType::Literal(literal) => Ok(Expr::Literal {
+                value: literal.clone(),
+            }),
+            TokenType::Identifier(name) => Ok(Expr::Var {
+                name: name.clone(),
+                token: token.clone(),
+            }),
             TokenType::OpenParenthesis => {
                 let body = self.expr()?;
                 self.consume(&TokenType::CloseParenthesis, ErrorType::UnclosedParenthesis)?;

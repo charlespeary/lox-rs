@@ -1,6 +1,6 @@
-var a = null;
-if (a) {
-    print "hello!";
-} else {
-    print "bye";
+var x = 5;
+
+while(x < 10) {
+    print x;
+    x = x + 1;
 }

@@ -5,7 +5,7 @@ use std::fmt;
 pub enum Literal {
     String(String),
     Number(f64),
-    Identifier(String),
+    Bool(bool),
     Null,
 }
 
@@ -50,6 +50,7 @@ pub enum TokenType {
     Null,
     Print,
     Literal(Literal),
+    Identifier(String),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -89,13 +90,13 @@ lazy_static! {
         let mut map: HashMap<&'static str, TokenType> = HashMap::new();
         map.insert("if", TokenType::If);
         map.insert("else", TokenType::Else);
-        map.insert("false", TokenType::False);
-        map.insert("true", TokenType::True);
+        map.insert("false", TokenType::Literal(Literal::Bool(false)));
+        map.insert("true", TokenType::Literal(Literal::Bool(true)));
         map.insert("var", TokenType::Var);
         map.insert("while", TokenType::While);
         map.insert("for", TokenType::For);
-        map.insert("&&", TokenType::And);
-        map.insert("||", TokenType::Or);
+        map.insert("and", TokenType::And);
+        map.insert("or", TokenType::Or);
         map.insert("fn", TokenType::Function);
         map.insert("return", TokenType::Return);
         map.insert("class", TokenType::Class);
