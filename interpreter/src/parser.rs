@@ -123,6 +123,8 @@ impl<'a> Parser<'a> {
         // TODO: maybe a match would be prettier here
         if self.next_matches(vec![TokenType::Print]) {
             self.print_statement()
+        } else if self.next_matches(vec![TokenType::For]) {
+            self.for_stmt()
         } else if self.next_matches(vec![TokenType::OpenBrace]) {
             self.block()
         } else if self.next_matches(vec![TokenType::If]) {
@@ -132,6 +134,34 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_statement()
         }
+    }
+
+    fn for_stmt(&mut self) -> StmtResult {
+        self.consume(
+            &TokenType::OpenParenthesis,
+            ErrorType::ExpectedOpenParenthesis,
+        )?;
+        let initializer = self.declaration()?;
+        let condition = self.expr()?;
+        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        let executor = self.expr()?;
+        self.consume(
+            &TokenType::CloseParenthesis,
+            ErrorType::ExpectedCloseParenthesis,
+        )?;
+
+        // TODO: I feel like this allows infinite amount of for loops after for loop and some other pointless stuff
+        let body = self.statement()?;
+
+        let body = Box::new(Stmt::Block {
+            stmts: vec![body, Stmt::Expr { expr: executor }],
+        });
+
+        let while_loop = Stmt::While { condition, body };
+
+        Ok(Stmt::Block {
+            stmts: vec![initializer, while_loop],
+        })
     }
 
     fn while_statement(&mut self) -> StmtResult {

@@ -214,6 +214,8 @@ impl StmtVisitor<()> for Interpreter {
     }
 
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<(), Error> {
+        println!("??");
+        println!("condition: {:#?}", self.evaluate(condition)?);
         loop {
             if self.evaluate(condition)?.to_bool() {
                 body.accept(self)?;
