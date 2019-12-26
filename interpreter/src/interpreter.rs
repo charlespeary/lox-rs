@@ -7,14 +7,42 @@ use crate::token::{Literal, Token, TokenType};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+struct State {
+    should_continue: bool,
+    should_break: bool,
+}
+
+impl State {
+    pub fn new() -> Self {
+        State {
+            should_break: false,
+            should_continue: false,
+        }
+    }
+
+    fn will_break(&mut self) -> bool {
+        let should_break = self.should_break;
+        self.should_break = false;
+        should_break
+    }
+
+    fn will_continue(&mut self) -> bool {
+        let should_continue = self.should_continue;
+        self.should_continue = false;
+        should_continue
+    }
+}
+
 pub struct Interpreter {
     env: Rc<RefCell<Environment>>,
+    state: State,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
             env: Rc::new(RefCell::new(Environment::new())),
+            state: State::new(),
         }
     }
 
@@ -24,6 +52,9 @@ impl Interpreter {
 
     pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), Error> {
         for stmt in stmts {
+            if self.state.will_continue() || self.state.should_break {
+                break;
+            }
             stmt.accept(self)?;
         }
         Ok(())
@@ -55,6 +86,10 @@ impl ExprVisitor<Value> for Interpreter {
             },
             TokenType::Minus => match (a, b) {
                 (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a - b)),
+                _ => error(operator, ErrorType::WrongType),
+            },
+            TokenType::Modulo => match (a, b) {
+                (Value::Number(a), Value::Number(b)) => Ok(Value::Number(a % b)),
                 _ => error(operator, ErrorType::WrongType),
             },
             TokenType::Star => match (a, b) {
@@ -214,15 +249,26 @@ impl StmtVisitor<()> for Interpreter {
     }
 
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<(), Error> {
-        println!("??");
-        println!("condition: {:#?}", self.evaluate(condition)?);
         loop {
             if self.evaluate(condition)?.to_bool() {
+                if self.state.will_break() {
+                    break;
+                }
                 body.accept(self)?;
             } else {
                 break;
             }
         }
+        Ok(())
+    }
+
+    fn visit_break_stmt(&mut self) -> Result<(), Error> {
+        self.state.should_break = true;
+        Ok(())
+    }
+
+    fn visit_continue_stmt(&mut self) -> Result<(), Error> {
+        self.state.should_continue = true;
         Ok(())
     }
 }

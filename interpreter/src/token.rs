@@ -23,6 +23,7 @@ pub enum TokenType {
     Plus,
     Star,
     Divide,
+    Modulo,
     Semicolon,
     Bang,
     BangEquals,
@@ -42,6 +43,8 @@ pub enum TokenType {
     For,
     And,
     Or,
+    Break,
+    Continue,
     Function,
     Return,
     Class,
@@ -105,6 +108,8 @@ lazy_static! {
         map.insert("null", TokenType::Null);
         map.insert("print", TokenType::Print);
         map.insert("null", TokenType::Literal(Literal::Null));
+        map.insert("break", TokenType::Break);
+        map.insert("continue", TokenType::Continue);
         map
     };
 }

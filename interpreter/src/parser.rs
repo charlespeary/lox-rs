@@ -8,9 +8,20 @@ use crate::token::Token;
 use crate::token::TokenType::Var;
 use std::mem;
 
+pub struct ParserState {
+    pub inside_loop: bool,
+}
+
+impl ParserState {
+    pub fn new() -> Self {
+        ParserState { inside_loop: false }
+    }
+}
+
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
     current: usize,
+    state: ParserState, // TODO: make a manager for it when another use case like this come
 }
 
 type ExprResult = Result<Expr, Error>;
@@ -18,7 +29,11 @@ type StmtResult = Result<Stmt, Error>;
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
-        Parser { tokens, current: 0 }
+        Parser {
+            tokens,
+            current: 0,
+            state: ParserState::new(),
+        }
     }
 
     fn peek(&self) -> &Token {
@@ -131,12 +146,16 @@ impl<'a> Parser<'a> {
             self.if_statement()
         } else if self.next_matches(vec![TokenType::While]) {
             self.while_statement()
+        } else if self.next_matches(vec![TokenType::Break, TokenType::Continue]) {
+            self.break_or_continue_statement()
         } else {
             self.expr_statement()
         }
     }
 
     fn for_stmt(&mut self) -> StmtResult {
+        self.state.inside_loop = true;
+
         self.consume(
             &TokenType::OpenParenthesis,
             ErrorType::ExpectedOpenParenthesis,
@@ -159,12 +178,16 @@ impl<'a> Parser<'a> {
 
         let while_loop = Stmt::While { condition, body };
 
+        self.state.inside_loop = false;
+
         Ok(Stmt::Block {
             stmts: vec![initializer, while_loop],
         })
     }
 
     fn while_statement(&mut self) -> StmtResult {
+        self.state.inside_loop = true;
+
         self.consume(
             &TokenType::OpenParenthesis,
             ErrorType::ExpectedCloseParenthesis,
@@ -175,6 +198,8 @@ impl<'a> Parser<'a> {
             ErrorType::ExpectedCloseParenthesis,
         )?;
         let body = Box::new(self.statement()?);
+
+        self.state.inside_loop = false;
 
         Ok(Stmt::While { condition, body })
     }
@@ -198,6 +223,21 @@ impl<'a> Parser<'a> {
             then_body,
             else_body,
         })
+    }
+
+    fn break_or_continue_statement(&mut self) -> StmtResult {
+        let res = if self.state.inside_loop {
+            if self.previous().token_type == TokenType::Break {
+                Ok(Stmt::Break)
+            } else {
+                Ok(Stmt::Continue)
+            }
+        } else {
+            let token = self.previous().clone();
+            self.error::<Stmt>(ErrorType::NotAllowedOutsideLoop, &token)
+        };
+        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        res
     }
 
     fn print_statement(&mut self) -> StmtResult {
@@ -314,7 +354,7 @@ impl<'a> Parser<'a> {
 
     fn multiplication(&mut self) -> ExprResult {
         let mut expr = self.unary()?;
-        while self.next_matches(vec![TokenType::Star, TokenType::Divide]) {
+        while self.next_matches(vec![TokenType::Star, TokenType::Divide, TokenType::Modulo]) {
             let operator = self.previous().clone();
             let right = self.unary()?;
             expr = Expr::Binary {
@@ -340,6 +380,8 @@ impl<'a> Parser<'a> {
 
     fn primary(&mut self) -> ExprResult {
         let token = self.advance();
+        let _token = token.clone();
+
         match &token.token_type {
             TokenType::Literal(literal) => Ok(Expr::Literal {
                 value: literal.clone(),
@@ -357,7 +399,6 @@ impl<'a> Parser<'a> {
             }
             _ => {
                 // TODO: figure out better name
-                let _token = token.clone();
                 self.error::<Expr>(ErrorType::UnparsableExpression, &_token)
             }
         }

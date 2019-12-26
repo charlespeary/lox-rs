@@ -34,6 +34,8 @@ pub enum ErrorType {
     ExpectedBlockEnd,
     #[display(fmt = "Expected if statement to have an else block")]
     ExpectedElseStatement,
+    #[display(fmt = "This keyword needs can't be used outside of the loops")]
+    NotAllowedOutsideLoop,
 }
 
 #[derive(Debug, Clone)]

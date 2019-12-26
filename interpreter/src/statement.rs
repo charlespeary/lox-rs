@@ -14,6 +14,8 @@ pub trait Visitor<R> {
         else_body: &Stmt,
     ) -> Result<R, Error>;
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<R, Error>;
+    fn visit_break_stmt(&mut self) -> Result<R, Error>;
+    fn visit_continue_stmt(&mut self) -> Result<R, Error>;
 }
 
 #[derive(Debug)]
@@ -40,6 +42,8 @@ pub enum Stmt {
         condition: Expr,
         body: Box<Stmt>,
     },
+    Break,
+    Continue,
 }
 
 impl Stmt {
@@ -55,6 +59,8 @@ impl Stmt {
                 else_body,
             } => visitor.visit_if_stmt(condition, then_body, else_body),
             Stmt::While { condition, body } => visitor.visit_while_stmt(condition, body),
+            Stmt::Continue => visitor.visit_continue_stmt(),
+            Stmt::Break => visitor.visit_break_stmt(),
         }
     }
 }
