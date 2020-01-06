@@ -7,6 +7,7 @@ mod ast;
 mod environment;
 mod error;
 mod expr;
+mod function;
 mod interpreter;
 mod lexer;
 mod parser;

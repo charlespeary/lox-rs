@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::expr::Expr;
+use crate::runtime_value::Value;
 use crate::token::Token;
 
 pub trait Visitor<R> {
@@ -11,14 +12,22 @@ pub trait Visitor<R> {
         &mut self,
         condition: &Expr,
         then_body: &Stmt,
-        else_body: &Stmt,
+        else_body: &Option<Box<Stmt>>,
     ) -> Result<R, Error>;
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<R, Error>;
     fn visit_break_stmt(&mut self) -> Result<R, Error>;
     fn visit_continue_stmt(&mut self) -> Result<R, Error>;
+    fn visit_function_stmt(
+        &mut self,
+        name: &String,
+        args: &Vec<String>,
+        body: &Vec<Stmt>,
+        token: &Token,
+    ) -> Result<R, Error>;
+    fn visit_return_stmt(&mut self, value: &Option<Expr>, token: &Token) -> Result<R, Error>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Print {
         expr: Expr,
@@ -36,7 +45,7 @@ pub enum Stmt {
     If {
         condition: Expr,
         then_body: Box<Stmt>,
-        else_body: Box<Stmt>,
+        else_body: Option<Box<Stmt>>,
     },
     While {
         condition: Expr,
@@ -44,6 +53,16 @@ pub enum Stmt {
     },
     Break,
     Continue,
+    Function {
+        args: Vec<String>,
+        body: Vec<Stmt>,
+        name: String,
+        token: Token,
+    },
+    Return {
+        token: Token,
+        value: Option<Expr>,
+    },
 }
 
 impl Stmt {
@@ -61,6 +80,13 @@ impl Stmt {
             Stmt::While { condition, body } => visitor.visit_while_stmt(condition, body),
             Stmt::Continue => visitor.visit_continue_stmt(),
             Stmt::Break => visitor.visit_break_stmt(),
+            Stmt::Function {
+                name,
+                args,
+                body,
+                token,
+            } => visitor.visit_function_stmt(name, args, body, token),
+            Stmt::Return { value, token } => visitor.visit_return_stmt(value, token),
         }
     }
 }

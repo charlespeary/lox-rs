@@ -212,6 +212,7 @@ impl Lexer {
                 '*' => Some(TokenType::Star),
                 ';' => Some(TokenType::Semicolon),
                 '%' => Some(TokenType::Modulo),
+                '|' => Some(TokenType::Bar),
                 '!' => {
                     let token_type = if self.next_matches('=') {
                         TokenType::BangEquals

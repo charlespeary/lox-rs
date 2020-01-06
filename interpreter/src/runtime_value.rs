@@ -1,10 +1,12 @@
 use crate::error::Error;
+use crate::function::Function;
 use crate::token::Literal;
 use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone)]
 pub enum Value {
+    Function(Function),
     String(String),
     Number(f64),
     Boolean(bool),
@@ -26,6 +28,7 @@ impl Value {
             Value::String(val) => val.len() > 0,
             Value::Number(val) => true,
             Value::Boolean(val) => *val,
+            Value::Function(val) => true,
             Null => false,
         }
     }
@@ -37,6 +40,7 @@ impl fmt::Display for Value {
             Value::String(str) => str.to_string(),
             Value::Number(num) => format!("{}", num).to_string(),
             Value::Boolean(b) => b.to_string(),
+            Value::Function(fun) => fun.to_string(),
             Null => "null".to_string(),
         };
         fmt.write_str(&str)?;

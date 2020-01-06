@@ -9,6 +9,12 @@ pub trait Visitor<R> {
     fn visit_var(&mut self, name: &String, token: &Token) -> Result<R, Error>;
     fn visit_assignment(&mut self, name: &String, expr: &Expr, token: &Token) -> Result<R, Error>;
     fn visit_logical(&mut self, left: &Expr, operator: &Token, right: &Expr) -> Result<R, Error>;
+    fn visit_call(
+        &mut self,
+        callee: &Expr,
+        token: &Token,
+        arguments: &Vec<Expr>,
+    ) -> Result<R, Error>;
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +48,11 @@ pub enum Expr {
         operator: Token,
         right: Box<Expr>,
     },
+    Call {
+        callee: Box<Expr>,
+        token: Token,
+        arguments: Vec<Expr>,
+    },
 }
 
 impl Expr {
@@ -62,6 +73,12 @@ impl Expr {
                 operator,
                 right,
             } => visitor.visit_logical(left, operator, right),
+
+            Expr::Call {
+                callee,
+                token,
+                arguments,
+            } => visitor.visit_call(callee, token, arguments),
         }
     }
 }

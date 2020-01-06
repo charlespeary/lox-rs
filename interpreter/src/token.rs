@@ -12,6 +12,7 @@ pub enum Literal {
 #[derive(Debug, PartialEq, Clone, Display)]
 pub enum TokenType {
     EOF,
+    Bar,
     Invalid,
     OpenParenthesis,
     CloseParenthesis,

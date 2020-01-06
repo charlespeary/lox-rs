@@ -1,6 +1,7 @@
 use crate::environment::Environment;
-use crate::error::{Error, ErrorType};
+use crate::error::{error, Error, ErrorType};
 use crate::expr::{Expr, Visitor as ExprVisitor};
+use crate::function::{Callable, Function};
 use crate::runtime_value::Value;
 use crate::statement::{Stmt, Visitor as StmtVisitor};
 use crate::token::{Literal, Token, TokenType};
@@ -34,15 +35,28 @@ impl State {
 }
 
 pub struct Interpreter {
-    env: Rc<RefCell<Environment>>,
+    pub env: Rc<RefCell<Environment>>,
+    globals: Rc<RefCell<Environment>>,
     state: State,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = {
+            let e = Rc::new(RefCell::new(Environment::new()));
+            let clock = Value::Function(Function::Native {
+                arity: 0,
+                body: || Value::Number(100.0),
+            });
+
+            e.borrow_mut().define_or_update("clock", &clock);
+            e
+        };
+
         Interpreter {
-            env: Rc::new(RefCell::new(Environment::new())),
+            env: Rc::new(RefCell::new(Environment::from(&globals))),
             state: State::new(),
+            globals,
         }
     }
 
@@ -50,22 +64,28 @@ impl Interpreter {
         expr.accept(self)
     }
 
-    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), Error> {
+    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<Value, Error> {
+        let mut last_val: Option<Value> = None;
         for stmt in stmts {
             if self.state.will_continue() || self.state.should_break {
                 break;
             }
-            stmt.accept(self)?;
+            last_val = Some(stmt.accept(self)?);
         }
-        Ok(())
+        Ok(last_val.map_or_else(|| Value::Null, |v| v))
     }
-}
 
-fn error(token: &Token, error_type: ErrorType) -> Result<Value, Error> {
-    Err(Error {
-        token: token.clone(),
-        error_type,
-    })
+    pub fn execute_block(
+        &mut self,
+        statements: &Vec<Stmt>,
+        env: Rc<RefCell<Environment>>,
+    ) -> Result<Value, Error> {
+        let mut prev_env = self.env.clone();
+        self.env = env;
+        let val = self.interpret(statements)?;
+        self.env = prev_env;
+        Ok(val)
+    }
 }
 
 impl ExprVisitor<Value> for Interpreter {
@@ -204,51 +224,66 @@ impl ExprVisitor<Value> for Interpreter {
         };
         Ok(res)
     }
+
+    fn visit_call(
+        &mut self,
+        callee: &Expr,
+        token: &Token,
+        arguments: &Vec<Expr>,
+    ) -> Result<Value, Error> {
+        let callee = self.evaluate(callee)?;
+
+        let args: Result<Vec<Value>, Error> = arguments.iter().map(|a| self.evaluate(a)).collect();
+
+        match callee {
+            Value::Function(func) => func.call(self, &args?),
+            _ => error(token, ErrorType::ValueNotCallable),
+        }
+    }
 }
 
-impl StmtVisitor<()> for Interpreter {
-    fn visit_print_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
+impl StmtVisitor<Value> for Interpreter {
+    fn visit_print_stmt(&mut self, expr: &Expr) -> Result<Value, Error> {
         let value = self.evaluate(expr)?;
         println!("{}", value.to_string());
-        Ok(())
+        Ok(Value::Null)
     }
 
-    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<(), Error> {
-        self.evaluate(expr)?;
-        Ok(())
+    fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<Value, Error> {
+        Ok(self.evaluate(expr)?)
     }
 
-    fn visit_var(&mut self, name: &String, expr: &Expr) -> Result<(), Error> {
+    fn visit_var(&mut self, name: &String, expr: &Expr) -> Result<Value, Error> {
         let value = self.evaluate(expr)?;
         self.env.borrow_mut().define_or_update(name, &value);
-        Ok(())
+        Ok(value)
     }
 
-    fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<(), Error> {
+    fn visit_block_stmt(&mut self, statements: &Vec<Stmt>) -> Result<Value, Error> {
         // TODO: figure out if I can avoid the clones
-        let mut prev_env = self.env.clone();
-        self.env = Rc::new(RefCell::new(Environment::from(&self.env)));
-        self.interpret(statements);
-        self.env = prev_env;
-        Ok(())
+        let env = Rc::new(RefCell::new(Environment::from(&self.env)));
+        Ok(self.execute_block(statements, env)?)
     }
 
     fn visit_if_stmt(
         &mut self,
         condition: &Expr,
         then_body: &Stmt,
-        else_body: &Stmt,
-    ) -> Result<(), Error> {
+        else_body: &Option<Box<Stmt>>,
+    ) -> Result<Value, Error> {
         let cond = self.evaluate(condition)?.to_bool();
         if cond {
-            then_body.accept(self)?;
+            Ok(then_body.accept(self)?)
         } else {
-            else_body.accept(self)?;
+            let val = match else_body {
+                Some(stmt) => stmt.accept(self)?,
+                _ => Value::Null,
+            };
+            Ok(val)
         }
-        Ok(())
     }
 
-    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<(), Error> {
+    fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<Value, Error> {
         loop {
             if self.evaluate(condition)?.to_bool() {
                 if self.state.will_break() {
@@ -259,16 +294,45 @@ impl StmtVisitor<()> for Interpreter {
                 break;
             }
         }
-        Ok(())
+        Ok(Value::Null)
     }
 
-    fn visit_break_stmt(&mut self) -> Result<(), Error> {
+    fn visit_break_stmt(&mut self) -> Result<Value, Error> {
         self.state.should_break = true;
-        Ok(())
+        Ok(Value::Null)
     }
 
-    fn visit_continue_stmt(&mut self) -> Result<(), Error> {
+    fn visit_continue_stmt(&mut self) -> Result<Value, Error> {
         self.state.should_continue = true;
-        Ok(())
+        Ok(Value::Null)
+    }
+
+    fn visit_function_stmt(
+        &mut self,
+        name: &String,
+        params: &Vec<String>,
+        body: &Vec<Stmt>,
+        token: &Token,
+    ) -> Result<Value, Error> {
+        // TODO: Is clone necessary? Probably not, it's ugly
+        let function = Value::Function(Function::Standard {
+            name: name.clone(),
+            body: body.clone(),
+            params: params.clone(),
+            token: token.clone(),
+        });
+
+        self.env.borrow_mut().define_or_update(name, &function);
+
+        Ok(function)
+    }
+
+    fn visit_return_stmt(&mut self, value: &Option<Expr>, token: &Token) -> Result<Value, Error> {
+        let val = match value {
+            Some(val) => self.evaluate(val)?,
+            None => Value::Null,
+        };
+
+        Ok(val)
     }
 }

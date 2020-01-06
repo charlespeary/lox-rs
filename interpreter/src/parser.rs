@@ -5,7 +5,7 @@ use crate::error::{Error, ErrorType};
 use crate::expr::Expr;
 use crate::statement::Stmt;
 use crate::token::Token;
-use crate::token::TokenType::Var;
+use crate::token::TokenType::{CloseParenthesis, Var};
 use std::mem;
 
 pub struct ParserState {
@@ -29,6 +29,7 @@ type StmtResult = Result<Stmt, Error>;
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
+        println!("{:#?}", tokens);
         Parser {
             tokens,
             current: 0,
@@ -68,8 +69,8 @@ impl<'a> Parser<'a> {
         self.peek().token_type == TokenType::EOF
     }
 
-    fn consume(&mut self, expected: &TokenType, error_type: ErrorType) -> Result<&Token, Error> {
-        if mem::discriminant((&self.peek().token_type)) == mem::discriminant(expected) {
+    fn consume(&mut self, expected: TokenType, error_type: ErrorType) -> Result<&Token, Error> {
+        if mem::discriminant((&self.peek().token_type)) == mem::discriminant(&expected) {
             Ok((self.advance()))
         } else {
             Err(Error {
@@ -93,42 +94,29 @@ impl<'a> Parser<'a> {
             let stmt = self.declaration()?;
             statements.push(stmt);
         }
-
         return Ok(statements);
     }
 
-    fn block(&mut self) -> Result<Stmt, Error> {
-        let mut stmts: Vec<Stmt> = Vec::new();
-
-        while &self.peek().token_type != &TokenType::CloseBrace && !self.is_at_end() {
-            let stmt = self.declaration()?;
-            stmts.push(stmt);
+    fn get_identifier(&mut self) -> Result<(String, Token), Error> {
+        let token = self.advance().clone();
+        if let TokenType::Identifier(identifier) = &token.token_type {
+            Ok((identifier.clone(), token.clone()))
+        } else {
+            self.error(ErrorType::ExpectedIdentifier, &token)
         }
-
-        self.consume(&TokenType::CloseBrace, ErrorType::ExpectedBlockEnd)?;
-
-        Ok(Stmt::Block { stmts })
     }
 
     fn declaration(&mut self) -> StmtResult {
         if self.next_matches(vec![TokenType::Var]) {
-            let name = if let TokenType::Identifier(identifier) = &self
-                .consume(
-                    &TokenType::Identifier(String::from("%")),
-                    ErrorType::ExpectedIdentifier,
-                )?
-                .token_type
-            {
-                Some(identifier.clone())
-            } else {
-                None
-            }
-            .expect("Identifier shouldn't ever be None");
-
-            self.consume(&TokenType::Assign, ErrorType::ExpectedAssign)?;
+            let (name, _) = self.get_identifier()?;
+            self.consume(TokenType::Assign, ErrorType::ExpectedAssign)?;
             let expr = self.expr()?;
-            self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+            self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
             return Ok(Stmt::Var { name, value: expr });
+        } else if self.next_matches(vec![TokenType::Function]) {
+            self.function_statement()
+        } else if self.next_matches(vec![TokenType::Bar]) {
+            self.closure_statement()
         } else {
             self.statement()
         }
@@ -142,6 +130,8 @@ impl<'a> Parser<'a> {
             self.for_stmt()
         } else if self.next_matches(vec![TokenType::OpenBrace]) {
             self.block()
+        } else if self.next_matches(vec![TokenType::Return]) {
+            self.return_stmt()
         } else if self.next_matches(vec![TokenType::If]) {
             self.if_statement()
         } else if self.next_matches(vec![TokenType::While]) {
@@ -153,19 +143,102 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn return_stmt(&mut self) -> StmtResult {
+        let token = self.previous().clone();
+        let value = Some(self.expr()?);
+
+        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+
+        Ok(Stmt::Return { value, token })
+    }
+
+    fn block(&mut self) -> StmtResult {
+        let mut stmts: Vec<Stmt> = Vec::new();
+
+        while &self.peek().token_type != &TokenType::CloseBrace && !self.is_at_end() {
+            let stmt = self.declaration()?;
+            stmts.push(stmt);
+        }
+        self.consume(TokenType::CloseBrace, ErrorType::ExpectedBlockEnd)?;
+        Ok(Stmt::Block { stmts })
+    }
+
+    fn parse_arguments(&mut self, delimiter: TokenType) -> Result<Vec<String>, Error> {
+        let mut args: Vec<String> = Vec::new();
+        if self.peek().token_type != delimiter {
+            loop {
+                let token = self.advance().clone();
+
+                if let TokenType::Identifier(arg) = token.token_type {
+                    args.push(arg);
+                } else {
+                    let token = self.previous().clone();
+                    return self.error(ErrorType::UnexpectedCharacter, &token);
+                }
+
+                if !self.next_matches(vec![TokenType::Coma]) {
+                    break;
+                }
+            }
+        }
+
+        let error_type = match delimiter {
+            TokenType::Bar => ErrorType::ExpectedCloseBar,
+            _ => ErrorType::ExpectedCloseParenthesis,
+        };
+
+        self.consume(delimiter, error_type)?;
+
+        Ok(args)
+    }
+
+    fn closure_statement(&mut self) -> StmtResult {
+        let token = self.previous().clone();
+        let args = self.parse_arguments(TokenType::Bar)?;
+        let body = vec![self.block()?];
+
+        Ok(Stmt::Function {
+            args,
+            body,
+            name: String::from("closure"),
+            token,
+        })
+    }
+
+    fn function_statement(&mut self) -> StmtResult {
+        let (name, token) = self.get_identifier()?;
+
+        self.consume(
+            TokenType::OpenParenthesis,
+            ErrorType::ExpectedOpenParenthesis,
+        )?;
+
+        let args = self.parse_arguments(TokenType::CloseParenthesis)?;
+
+        self.consume(TokenType::OpenBrace, ErrorType::ExpectedBlockStart)?;
+        let body = vec![self.block()?];
+
+        Ok(Stmt::Function {
+            args,
+            body,
+            name,
+            token,
+        })
+    }
+
     fn for_stmt(&mut self) -> StmtResult {
         self.state.inside_loop = true;
 
         self.consume(
-            &TokenType::OpenParenthesis,
+            TokenType::OpenParenthesis,
             ErrorType::ExpectedOpenParenthesis,
         )?;
         let initializer = self.declaration()?;
         let condition = self.expr()?;
-        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
         let executor = self.expr()?;
         self.consume(
-            &TokenType::CloseParenthesis,
+            TokenType::CloseParenthesis,
             ErrorType::ExpectedCloseParenthesis,
         )?;
 
@@ -189,12 +262,12 @@ impl<'a> Parser<'a> {
         self.state.inside_loop = true;
 
         self.consume(
-            &TokenType::OpenParenthesis,
+            TokenType::OpenParenthesis,
             ErrorType::ExpectedCloseParenthesis,
         )?;
         let condition = self.expr()?;
         self.consume(
-            &TokenType::CloseParenthesis,
+            TokenType::CloseParenthesis,
             ErrorType::ExpectedCloseParenthesis,
         )?;
         let body = Box::new(self.statement()?);
@@ -206,17 +279,20 @@ impl<'a> Parser<'a> {
 
     fn if_statement(&mut self) -> StmtResult {
         self.consume(
-            &TokenType::OpenParenthesis,
+            TokenType::OpenParenthesis,
             ErrorType::ExpectedOpenParenthesis,
         )?;
         let condition = self.expr()?;
         self.consume(
-            &TokenType::CloseParenthesis,
+            TokenType::CloseParenthesis,
             ErrorType::ExpectedCloseParenthesis,
         )?;
         let then_body = Box::new(self.statement()?);
-        self.consume(&TokenType::Else, ErrorType::ExpectedElseStatement)?;
-        let else_body = Box::new(self.statement()?);
+        let else_body = if self.next_matches(vec![TokenType::Else]) {
+            Some(Box::new(self.statement()?))
+        } else {
+            None
+        };
 
         Ok(Stmt::If {
             condition,
@@ -236,19 +312,19 @@ impl<'a> Parser<'a> {
             let token = self.previous().clone();
             self.error::<Stmt>(ErrorType::NotAllowedOutsideLoop, &token)
         };
-        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
         res
     }
 
     fn print_statement(&mut self) -> StmtResult {
         let expr = self.expr()?;
-        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
         Ok(Stmt::Print { expr })
     }
 
     fn expr_statement(&mut self) -> StmtResult {
         let expr = self.expr()?;
-        self.consume(&TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
         Ok(Stmt::Expr { expr })
     }
 
@@ -375,7 +451,52 @@ impl<'a> Parser<'a> {
                 expr: Box::new(right),
             });
         }
-        self.primary()
+        self.call()
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> ExprResult {
+        let mut arguments: Vec<Expr> = Vec::new();
+
+        if !(self.peek().token_type == TokenType::CloseParenthesis) {
+            loop {
+                arguments.push(self.expr()?);
+                if !self.next_matches(vec![TokenType::Coma]) {
+                    break;
+                }
+            }
+        }
+
+        let token = self
+            .consume(
+                TokenType::CloseParenthesis,
+                ErrorType::ExpectedCloseParenthesis,
+            )?
+            .clone();
+
+        if arguments.len() >= 255 {
+            println!("Function exceeded maximum number of arguments");
+            //            self.error(ErrorType::MaximumArguments, &token)
+        }
+
+        Ok(Expr::Call {
+            callee: Box::new(callee),
+            arguments,
+            token,
+        })
+    }
+
+    fn call(&mut self) -> ExprResult {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.next_matches(vec![TokenType::OpenParenthesis]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        return Ok(expr);
     }
 
     fn primary(&mut self) -> ExprResult {
@@ -392,7 +513,7 @@ impl<'a> Parser<'a> {
             }),
             TokenType::OpenParenthesis => {
                 let body = self.expr()?;
-                self.consume(&TokenType::CloseParenthesis, ErrorType::UnclosedParenthesis)?;
+                self.consume(TokenType::CloseParenthesis, ErrorType::UnclosedParenthesis)?;
                 Ok(Expr::Grouping {
                     expr: Box::new(body),
                 })
