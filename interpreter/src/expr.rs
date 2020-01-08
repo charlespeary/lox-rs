@@ -1,4 +1,5 @@
 use crate::error::Error;
+use crate::statement::Stmt;
 use crate::token::{Literal, Token};
 
 pub trait Visitor<R> {
@@ -14,6 +15,13 @@ pub trait Visitor<R> {
         callee: &Expr,
         token: &Token,
         arguments: &Vec<Expr>,
+    ) -> Result<R, Error>;
+    fn visit_closure(
+        &mut self,
+        params: &Vec<String>,
+        body: &Vec<Stmt>,
+        name: &String,
+        token: &Token,
     ) -> Result<R, Error>;
 }
 
@@ -53,6 +61,12 @@ pub enum Expr {
         token: Token,
         arguments: Vec<Expr>,
     },
+    Closure {
+        params: Vec<String>,
+        body: Vec<Stmt>,
+        name: String,
+        token: Token,
+    },
 }
 
 impl Expr {
@@ -79,6 +93,12 @@ impl Expr {
                 token,
                 arguments,
             } => visitor.visit_call(callee, token, arguments),
+            Expr::Closure {
+                params,
+                body,
+                token,
+                name,
+            } => visitor.visit_closure(params, body, name, token),
         }
     }
 }

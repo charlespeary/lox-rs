@@ -20,7 +20,7 @@ pub trait Visitor<R> {
     fn visit_function_stmt(
         &mut self,
         name: &String,
-        args: &Vec<String>,
+        params: &Vec<String>,
         body: &Vec<Stmt>,
         token: &Token,
     ) -> Result<R, Error>;
@@ -54,7 +54,7 @@ pub enum Stmt {
     Break,
     Continue,
     Function {
-        args: Vec<String>,
+        params: Vec<String>,
         body: Vec<Stmt>,
         name: String,
         token: Token,
@@ -82,10 +82,10 @@ impl Stmt {
             Stmt::Break => visitor.visit_break_stmt(),
             Stmt::Function {
                 name,
-                args,
+                params,
                 body,
                 token,
-            } => visitor.visit_function_stmt(name, args, body, token),
+            } => visitor.visit_function_stmt(name, params, body, token),
             Stmt::Return { value, token } => visitor.visit_return_stmt(value, token),
         }
     }

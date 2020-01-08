@@ -45,6 +45,8 @@ pub enum ErrorType {
     MaximumArguments,
     #[display(fmt = "This value is not callable")]
     ValueNotCallable,
+    #[display(fmt = "Expected arrow after closure declaration")]
+    ExpectedArrow,
     #[display(fmt = "Invalid number of arguments")]
     InvalidNumberOfArguments,
 }

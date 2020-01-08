@@ -29,7 +29,6 @@ type StmtResult = Result<Stmt, Error>;
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
-        println!("{:#?}", tokens);
         Parser {
             tokens,
             current: 0,
@@ -115,8 +114,6 @@ impl<'a> Parser<'a> {
             return Ok(Stmt::Var { name, value: expr });
         } else if self.next_matches(vec![TokenType::Function]) {
             self.function_statement()
-        } else if self.next_matches(vec![TokenType::Bar]) {
-            self.closure_statement()
         } else {
             self.statement()
         }
@@ -163,14 +160,14 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Block { stmts })
     }
 
-    fn parse_arguments(&mut self, delimiter: TokenType) -> Result<Vec<String>, Error> {
-        let mut args: Vec<String> = Vec::new();
+    fn parse_params(&mut self, delimiter: TokenType) -> Result<Vec<String>, Error> {
+        let mut params: Vec<String> = Vec::new();
         if self.peek().token_type != delimiter {
             loop {
                 let token = self.advance().clone();
 
-                if let TokenType::Identifier(arg) = token.token_type {
-                    args.push(arg);
+                if let TokenType::Identifier(param) = token.token_type {
+                    params.push(param);
                 } else {
                     let token = self.previous().clone();
                     return self.error(ErrorType::UnexpectedCharacter, &token);
@@ -189,20 +186,7 @@ impl<'a> Parser<'a> {
 
         self.consume(delimiter, error_type)?;
 
-        Ok(args)
-    }
-
-    fn closure_statement(&mut self) -> StmtResult {
-        let token = self.previous().clone();
-        let args = self.parse_arguments(TokenType::Bar)?;
-        let body = vec![self.block()?];
-
-        Ok(Stmt::Function {
-            args,
-            body,
-            name: String::from("closure"),
-            token,
-        })
+        Ok(params)
     }
 
     fn function_statement(&mut self) -> StmtResult {
@@ -213,13 +197,13 @@ impl<'a> Parser<'a> {
             ErrorType::ExpectedOpenParenthesis,
         )?;
 
-        let args = self.parse_arguments(TokenType::CloseParenthesis)?;
+        let params = self.parse_params(TokenType::CloseParenthesis)?;
 
         self.consume(TokenType::OpenBrace, ErrorType::ExpectedBlockStart)?;
         let body = vec![self.block()?];
 
         Ok(Stmt::Function {
-            args,
+            params,
             body,
             name,
             token,
@@ -329,6 +313,32 @@ impl<'a> Parser<'a> {
     }
 
     fn expr(&mut self) -> ExprResult {
+        self.closure()
+    }
+
+    fn closure(&mut self) -> ExprResult {
+        let token = self.previous().clone();
+
+        if self.next_matches(vec![TokenType::Bar]) {
+            let params = self.parse_params(TokenType::Bar)?;
+            self.consume(TokenType::Arrow, ErrorType::ExpectedArrow)?;
+            let body = if self.next_matches(vec![TokenType::OpenBrace]) {
+                self.block()?
+            } else {
+                let expr = self.expr()?;
+                Stmt::Return {
+                    value: Some(expr),
+                    token: token.clone(),
+                }
+            };
+
+            return Ok(Expr::Closure {
+                params,
+                body: vec![body],
+                name: String::from("closure"),
+                token,
+            });
+        }
         self.assignment()
     }
 

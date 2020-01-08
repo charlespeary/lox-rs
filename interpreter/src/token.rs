@@ -53,6 +53,7 @@ pub enum TokenType {
     This,
     Null,
     Print,
+    Arrow,
     Literal(Literal),
     Identifier(String),
 }

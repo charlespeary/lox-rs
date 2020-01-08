@@ -8,9 +8,12 @@ use crate::token::{Literal, Token, TokenType};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+// this kind of control flow can be done with exceptions, but I'm not a big fan of that idea
 struct State {
     should_continue: bool,
     should_break: bool,
+    should_return: bool,
+    inside_call: bool,
 }
 
 impl State {
@@ -18,7 +21,26 @@ impl State {
         State {
             should_break: false,
             should_continue: false,
+            should_return: false,
+            inside_call: false,
         }
+    }
+
+    fn will_return(&mut self) -> bool {
+        if self.should_return && self.inside_call {
+            self.should_return = false;
+            return true;
+        }
+        false
+    }
+
+    fn enter_call(&mut self) {
+        self.inside_call = true;
+    }
+
+    fn exit_call(&mut self) {
+        self.should_return = false;
+        self.inside_call = false;
     }
 
     fn will_break(&mut self) -> bool {
@@ -36,7 +58,7 @@ impl State {
 
 pub struct Interpreter {
     pub env: Rc<RefCell<Environment>>,
-    globals: Rc<RefCell<Environment>>,
+    pub globals: Rc<RefCell<Environment>>,
     state: State,
 }
 
@@ -67,7 +89,7 @@ impl Interpreter {
     pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<Value, Error> {
         let mut last_val: Option<Value> = None;
         for stmt in stmts {
-            if self.state.will_continue() || self.state.should_break {
+            if self.state.will_continue() || self.state.will_return() || self.state.should_break {
                 break;
             }
             last_val = Some(stmt.accept(self)?);
@@ -235,10 +257,31 @@ impl ExprVisitor<Value> for Interpreter {
 
         let args: Result<Vec<Value>, Error> = arguments.iter().map(|a| self.evaluate(a)).collect();
 
-        match callee {
-            Value::Function(func) => func.call(self, &args?),
+        let result = match callee {
+            Value::Function(func) => {
+                self.state.enter_call();
+                func.call(self, &args?)
+            }
             _ => error(token, ErrorType::ValueNotCallable),
-        }
+        };
+
+        self.state.exit_call();
+        result
+    }
+
+    fn visit_closure(
+        &mut self,
+        args: &Vec<String>,
+        body: &Vec<Stmt>,
+        name: &String,
+        token: &Token,
+    ) -> Result<Value, Error> {
+        Ok(Value::Function(Function::Standard {
+            params: args.clone(),
+            body: body.clone(),
+            name: name.clone(),
+            token: token.clone(),
+        }))
     }
 }
 
@@ -332,7 +375,7 @@ impl StmtVisitor<Value> for Interpreter {
             Some(val) => self.evaluate(val)?,
             None => Value::Null,
         };
-
+        self.state.should_return = true;
         Ok(val)
     }
 }

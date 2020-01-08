@@ -36,7 +36,9 @@ impl Callable for Function {
     }
 
     fn call(&self, interpreter: &mut Interpreter, args: &Vec<Value>) -> Result<Value, Error> {
-        let env = Rc::new(RefCell::new(Environment::from(&interpreter.env)));
+        let globals = Rc::new(RefCell::new(interpreter.globals.borrow().clone()));
+
+        let env = Rc::new(RefCell::new(Environment::from(&globals)));
 
         let val = match self {
             Function::Standard {

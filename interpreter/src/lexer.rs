@@ -240,6 +240,8 @@ impl Lexer {
                 '=' => {
                     let token_type = if self.next_matches('=') {
                         TokenType::Compare
+                    } else if self.next_matches('>') {
+                        TokenType::Arrow
                     } else {
                         TokenType::Assign
                     };
