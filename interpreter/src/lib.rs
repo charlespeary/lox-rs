@@ -11,6 +11,7 @@ mod function;
 mod interpreter;
 mod lexer;
 mod parser;
+mod resolver;
 mod runtime_value;
 mod statement;
 mod token;
@@ -20,6 +21,7 @@ use crate::error::Error;
 use crate::interpreter::Interpreter;
 use crate::lexer::Lexer;
 use crate::parser::Parser;
+use crate::resolver::Resolver;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::io::{self, BufRead};
@@ -42,6 +44,9 @@ pub fn run_code(source_code: &str) -> Result<(), Error> {
             let mut parser = Parser::new(&tokens);
             let stmts = parser.parse_tokens()?;
             let mut interpreter = Interpreter::new();
+            let mut resolver = Resolver::new(&mut interpreter);
+            resolver.resolve_stmts(&stmts);
+            println!("x: {:#?}", interpreter.distances);
             interpreter.interpret(&stmts)?;
             Ok(())
         }

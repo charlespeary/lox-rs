@@ -49,6 +49,10 @@ pub enum ErrorType {
     ExpectedArrow,
     #[display(fmt = "Invalid number of arguments")]
     InvalidNumberOfArguments,
+    #[display(fmt = "Can't use variable in it's own initializer")]
+    CantUseVariableInItsInitializer,
+    #[display(fmt = "Variable with this name already declared in this scope")]
+    DoubleDeclarationInSameScope,
 }
 
 #[derive(Debug, Clone)]

@@ -54,6 +54,7 @@ impl Callable for Function {
                 for (arg, name) in args.into_iter().zip(params.into_iter()) {
                     env.borrow_mut().define_or_update(name, arg);
                 }
+
                 interpreter.execute_block(body, env)?
             }
             Function::Native { body, .. } => body(),

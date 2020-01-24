@@ -21,7 +21,7 @@ impl ParserState {
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
     current: usize,
-    state: ParserState, // TODO: make a manager for it when another use case like this come
+    state: ParserState,
 }
 
 type ExprResult = Result<Expr, Error>;
@@ -108,8 +108,11 @@ impl<'a> Parser<'a> {
     fn declaration(&mut self) -> StmtResult {
         if self.next_matches(vec![TokenType::Var]) {
             let (name, _) = self.get_identifier()?;
-            self.consume(TokenType::Assign, ErrorType::ExpectedAssign)?;
-            let expr = self.expr()?;
+            let expr = if self.next_matches(vec![TokenType::Assign]) {
+                Some(self.expr()?)
+            } else {
+                None
+            };
             self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
             return Ok(Stmt::Var { name, value: expr });
         } else if self.next_matches(vec![TokenType::Function]) {

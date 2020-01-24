@@ -2,10 +2,12 @@ use crate::environment::Environment;
 use crate::error::{error, Error, ErrorType};
 use crate::expr::{Expr, Visitor as ExprVisitor};
 use crate::function::{Callable, Function};
+use crate::resolver::VarRef;
 use crate::runtime_value::Value;
 use crate::statement::{Stmt, Visitor as StmtVisitor};
 use crate::token::{Literal, Token, TokenType};
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 // this kind of control flow can be done with exceptions, but I'm not a big fan of that idea
@@ -59,6 +61,7 @@ impl State {
 pub struct Interpreter {
     pub env: Rc<RefCell<Environment>>,
     pub globals: Rc<RefCell<Environment>>,
+    pub distances: HashMap<String, usize>,
     state: State,
 }
 
@@ -78,12 +81,30 @@ impl Interpreter {
         Interpreter {
             env: Rc::new(RefCell::new(Environment::from(&globals))),
             state: State::new(),
+            distances: HashMap::new(),
             globals,
         }
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<Value, Error> {
         expr.accept(self)
+    }
+
+    fn lookup_variable(&mut self, var: VarRef) -> Option<Value> {
+        let distance = self.get_distance(&var);
+        let name = &var.name;
+        match distance {
+            Some(dist) => self.env.borrow().get_at(name, dist),
+            None => self.globals.borrow().get(name),
+        }
+    }
+
+    fn get_distance(&self, var: &VarRef) -> Option<usize> {
+        self.distances.get(&var.to_string()).map(|v| *v)
+    }
+
+    pub fn resolve_distance(&mut self, var: VarRef, depth: usize) {
+        self.distances.insert(var.to_string(), depth);
     }
 
     pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<Value, Error> {
@@ -202,7 +223,7 @@ impl ExprVisitor<Value> for Interpreter {
     }
 
     fn visit_var(&mut self, name: &String, token: &Token) -> Result<Value, Error> {
-        let var = self.env.borrow().get(name);
+        let var = self.lookup_variable(VarRef::new(token, name));
         // not sure if we should clone anything at all here
         match var {
             Some(val) => Ok(val.clone()),
@@ -217,10 +238,18 @@ impl ExprVisitor<Value> for Interpreter {
         token: &Token,
     ) -> Result<Value, Error> {
         let value = self.evaluate(expr)?;
-        if let Some(val) = self.env.borrow_mut().define_or_update(name, &value) {
-            Ok(val)
+        let distance = self.get_distance(&VarRef::new(token, name));
+
+        if let Some(dist) = distance {
+            match self.env.borrow_mut().assign_at(name, &value, dist) {
+                Some(val) => Ok(val),
+                None => error(token, ErrorType::UndefinedVariable),
+            }
         } else {
-            error(token, ErrorType::UndefinedVariable)
+            match self.globals.borrow().get(name) {
+                Some(val) => Ok(val),
+                None => error(token, ErrorType::UndefinedVariable),
+            }
         }
     }
 
@@ -296,8 +325,11 @@ impl StmtVisitor<Value> for Interpreter {
         Ok(self.evaluate(expr)?)
     }
 
-    fn visit_var(&mut self, name: &String, expr: &Expr) -> Result<Value, Error> {
-        let value = self.evaluate(expr)?;
+    fn visit_var(&mut self, name: &String, expr: &Option<Expr>) -> Result<Value, Error> {
+        let value = match expr {
+            Some(e) => self.evaluate(e)?,
+            None => Value::Null,
+        };
         self.env.borrow_mut().define_or_update(name, &value);
         Ok(value)
     }

@@ -26,16 +26,47 @@ impl Environment {
     }
 
     pub fn define_or_update(&mut self, name: &str, value: &Value) -> Option<Value> {
-        if let Some(env) = &self.enclosing {
-            return env.borrow_mut().define_or_update(name, value);
-        }
         self.values.insert(name.to_owned(), value.clone())
     }
 
-    pub fn get(&self, name: &str) -> Option<Value> {
-        if let Some(env) = &self.enclosing {
-            return env.borrow().get(name);
+    pub fn assign_at(&mut self, name: &str, value: &Value, distance: usize) -> Option<Value> {
+        if distance > 0 {
+            println!("assigning {}", name);
+            self.ancestor(distance)
+                .borrow_mut()
+                .define_or_update(name, value)
+        } else {
+            println!("assigning {}", name);
+            self.define_or_update(name, value)
         }
+    }
+
+    pub fn get(&self, name: &str) -> Option<Value> {
         self.values.get(name).map(|val| val.clone())
+    }
+
+    fn ancestor(&self, distance: usize) -> Rc<RefCell<Environment>> {
+        // this clone here is probably very expensive one
+        let mut env = self
+            .enclosing
+            .clone()
+            .expect("Trying to access environment that doesn't exist");
+        for i in 0..distance - 1 {
+            println!("{}", i);
+            let enclosing = env.borrow().enclosing.clone();
+            if let Some(e) = &enclosing {
+                println!("found env");
+                env = Rc::clone(e)
+            }
+        }
+        env
+    }
+
+    pub fn get_at(&self, name: &str, distance: usize) -> Option<Value> {
+        if distance > 0 {
+            self.ancestor(distance).borrow().get(name)
+        } else {
+            self.get(name)
+        }
     }
 }

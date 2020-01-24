@@ -6,7 +6,7 @@ use crate::token::Token;
 pub trait Visitor<R> {
     fn visit_print_stmt(&mut self, expr: &Expr) -> Result<R, Error>;
     fn visit_expr_stmt(&mut self, expr: &Expr) -> Result<R, Error>;
-    fn visit_var(&mut self, name: &String, value: &Expr) -> Result<R, Error>;
+    fn visit_var(&mut self, name: &String, value: &Option<Expr>) -> Result<R, Error>;
     fn visit_block_stmt(&mut self, stms: &Vec<Stmt>) -> Result<R, Error>;
     fn visit_if_stmt(
         &mut self,
@@ -37,7 +37,7 @@ pub enum Stmt {
     },
     Var {
         name: String,
-        value: Expr,
+        value: Option<Expr>,
     },
     Block {
         stmts: Vec<Stmt>,
