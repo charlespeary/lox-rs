@@ -47,3 +47,17 @@ impl fmt::Display for Value {
         Ok(())
     }
 }
+
+impl fmt::Debug for Value {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let str = match self {
+            Value::String(str) => str.to_string(),
+            Value::Number(num) => format!("{}", num).to_string(),
+            Value::Boolean(b) => b.to_string(),
+            Value::Function(fun) => fun.to_string(),
+            Null => "null".to_string(),
+        };
+        fmt.write_str(&str)?;
+        Ok(())
+    }
+}

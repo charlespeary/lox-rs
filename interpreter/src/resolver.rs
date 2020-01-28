@@ -8,7 +8,7 @@ use std::collections::{HashMap, LinkedList};
 use std::hash::{Hash, Hasher};
 
 /// Distance to the variable from the scope it is referenced in
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VarRef {
     token: Token,
     pub name: String,
@@ -56,7 +56,6 @@ impl<'a> Resolver<'a> {
         let mut scopes = LinkedList::new();
         // add the top "global" like scope
         scopes.push_back(HashMap::new());
-
         Resolver {
             interpreter,
             scopes,
@@ -78,8 +77,9 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_distance(&mut self, distance: VarRef) {
-        for (depth, scope) in self.scopes.iter().rev().enumerate() {
-            if let Some(x) = scope.get(&distance.name) {
+        for (i, scope) in self.scopes.iter().rev().enumerate() {
+            if let Some(_) = scope.get(&distance.name) {
+                let depth = if i == 0 { 0 } else { i - 1 };
                 self.interpreter.resolve_distance(distance.clone(), depth);
             }
         }
@@ -161,7 +161,6 @@ impl<'a> ExprVisitor<()> for Resolver<'a> {
                 }
             }
         }
-
         self.resolve_distance(VarRef::new(token, name));
         Ok(())
     }

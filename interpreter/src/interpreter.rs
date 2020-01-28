@@ -60,7 +60,6 @@ impl State {
 
 pub struct Interpreter {
     pub env: Rc<RefCell<Environment>>,
-    pub globals: Rc<RefCell<Environment>>,
     pub distances: HashMap<String, usize>,
     state: State,
 }
@@ -82,7 +81,6 @@ impl Interpreter {
             env: Rc::new(RefCell::new(Environment::from(&globals))),
             state: State::new(),
             distances: HashMap::new(),
-            globals,
         }
     }
 
@@ -93,10 +91,7 @@ impl Interpreter {
     fn lookup_variable(&mut self, var: VarRef) -> Option<Value> {
         let distance = self.get_distance(&var);
         let name = &var.name;
-        match distance {
-            Some(dist) => self.env.borrow().get_at(name, dist),
-            None => self.globals.borrow().get(name),
-        }
+        self.env.borrow().get_at(name, distance.unwrap_or(0))
     }
 
     fn get_distance(&self, var: &VarRef) -> Option<usize> {
@@ -246,10 +241,7 @@ impl ExprVisitor<Value> for Interpreter {
                 None => error(token, ErrorType::UndefinedVariable),
             }
         } else {
-            match self.globals.borrow().get(name) {
-                Some(val) => Ok(val),
-                None => error(token, ErrorType::UndefinedVariable),
-            }
+            error(token, ErrorType::UndefinedVariable)
         }
     }
 

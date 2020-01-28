@@ -46,14 +46,10 @@ pub fn run_code(source_code: &str) -> Result<(), Error> {
             let mut interpreter = Interpreter::new();
             let mut resolver = Resolver::new(&mut interpreter);
             resolver.resolve_stmts(&stmts);
-            println!("x: {:#?}", interpreter.distances);
             interpreter.interpret(&stmts)?;
             Ok(())
         }
-        Err(e) => {
-            println!("ERR");
-            Err(e[0].clone())
-        }
+        Err(e) => Err(e[0].clone()),
     }
 }
 

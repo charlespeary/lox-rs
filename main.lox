@@ -3,8 +3,13 @@ var b = "test";
    fn showB(){
         print b;
    }
-   var b = 10;
    showB();
 }
 
 
+var a = "test2";
+fn showA() {
+    print a;
+}
+
+showA();

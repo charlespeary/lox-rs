@@ -36,10 +36,7 @@ impl Callable for Function {
     }
 
     fn call(&self, interpreter: &mut Interpreter, args: &Vec<Value>) -> Result<Value, Error> {
-        let globals = Rc::new(RefCell::new(interpreter.globals.borrow().clone()));
-
-        let env = Rc::new(RefCell::new(Environment::from(&globals)));
-
+        let mut env = Environment::from(&interpreter.env);
         let val = match self {
             Function::Standard {
                 params,
@@ -50,12 +47,11 @@ impl Callable for Function {
                 if self.arity() != args.len() {
                     return error(token, ErrorType::InvalidNumberOfArguments);
                 }
-
                 for (arg, name) in args.into_iter().zip(params.into_iter()) {
-                    env.borrow_mut().define_or_update(name, arg);
+                    env.define_or_update(name, arg);
                 }
 
-                interpreter.execute_block(body, env)?
+                interpreter.execute_block(body, Rc::new(RefCell::new(env)))?
             }
             Function::Native { body, .. } => body(),
         };
