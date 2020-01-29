@@ -79,8 +79,10 @@ impl<'a> Resolver<'a> {
     fn resolve_distance(&mut self, distance: VarRef) {
         for (i, scope) in self.scopes.iter().rev().enumerate() {
             if let Some(_) = scope.get(&distance.name) {
-                let depth = if i == 0 { 0 } else { i - 1 };
+                //                let depth = if i == 0 { 0 } else { i - 1 };
+                let depth = i;
                 self.interpreter.resolve_distance(distance.clone(), depth);
+                return;
             }
         }
     }

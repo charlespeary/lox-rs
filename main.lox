@@ -1,15 +1,17 @@
-var b = "test";
+var b = 10;
 {
-   fn showB(){
+    fn increment(){
+        b = b + 1;
         print b;
-   }
-   showB();
+    }
+
+    var b = 20;
+    print b;
+    increment();
+    increment();
+    increment();
+    increment();
+    increment();
+    increment();
+    print b;
 }
-
-
-var a = "test2";
-fn showA() {
-    print a;
-}
-
-showA();

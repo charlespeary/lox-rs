@@ -53,7 +53,7 @@ impl Environment {
             .enclosing
             .clone()
             .expect("Trying to access environment that doesn't exist");
-        for i in 0..distance {
+        for i in 1..distance {
             let enclosing = env.borrow().enclosing.clone();
             if let Some(e) = &enclosing {
                 env = Rc::clone(e)
