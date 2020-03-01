@@ -23,9 +23,19 @@ pub trait Visitor<R> {
         name: &String,
         token: &Token,
     ) -> Result<R, Error>;
+    fn visit_get(&mut self, name: &String, token: &Token, expr: &Expr) -> Result<R, Error>;
+    fn visit_set(
+        &mut self,
+        token: &Token,
+        name: &String,
+        value: &Expr,
+        obj: &Expr,
+    ) -> Result<R, Error>;
+    fn visit_this(&mut self, token: &Token) -> Result<R, Error>;
+    fn visit_super(&mut self, token: &Token, method_name: &String) -> Result<R, Error>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum Expr {
     Binary {
         left: Box<Expr>,
@@ -67,6 +77,24 @@ pub enum Expr {
         name: String,
         token: Token,
     },
+    Get {
+        name: String,
+        token: Token,
+        expr: Box<Expr>,
+    },
+    Set {
+        name: String,
+        token: Token,
+        value: Box<Expr>,
+        obj: Box<Expr>,
+    },
+    This {
+        token: Token,
+    },
+    Super {
+        token: Token,
+        method_name: String,
+    },
 }
 
 impl Expr {
@@ -99,6 +127,15 @@ impl Expr {
                 token,
                 name,
             } => visitor.visit_closure(params, body, name, token),
+            Expr::Get { name, token, expr } => visitor.visit_get(name, token, expr),
+            Expr::Set {
+                token,
+                name,
+                value,
+                obj,
+            } => visitor.visit_set(token, name, value, obj),
+            Expr::This { token } => visitor.visit_this(token),
+            Expr::Super { token, method_name } => visitor.visit_super(token, method_name),
         }
     }
 }

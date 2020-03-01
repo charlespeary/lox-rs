@@ -1,6 +1,5 @@
 use super::token::{Literal, TokenType};
 use crate::ast::print_ast;
-use crate::error::ErrorType::ExpectedIdentifier;
 use crate::error::{Error, ErrorType};
 use crate::expr::Expr;
 use crate::statement::Stmt;
@@ -107,19 +106,25 @@ impl<'a> Parser<'a> {
 
     fn declaration(&mut self) -> StmtResult {
         if self.next_matches(vec![TokenType::Var]) {
-            let (name, _) = self.get_identifier()?;
-            let expr = if self.next_matches(vec![TokenType::Assign]) {
-                Some(self.expr()?)
-            } else {
-                None
-            };
-            self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
-            return Ok(Stmt::Var { name, value: expr });
+            self.variable()
         } else if self.next_matches(vec![TokenType::Function]) {
             self.function_statement()
+        } else if self.next_matches(vec![TokenType::Class]) {
+            self.class_statement()
         } else {
             self.statement()
         }
+    }
+
+    fn variable(&mut self) -> StmtResult {
+        let (name, _) = self.get_identifier()?;
+        let expr = if self.next_matches(vec![TokenType::Assign]) {
+            Some(self.expr()?)
+        } else {
+            None
+        };
+        self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
+        return Ok(Stmt::Var { name, value: expr });
     }
 
     fn statement(&mut self) -> StmtResult {
@@ -190,6 +195,36 @@ impl<'a> Parser<'a> {
         self.consume(delimiter, error_type)?;
 
         Ok(params)
+    }
+
+    fn class_statement(&mut self) -> StmtResult {
+        let (name, token) = self.get_identifier()?;
+        let superclass = if self.next_matches(vec![TokenType::Inherit]) {
+            let (name, token) = self.get_identifier()?;
+            Some(Expr::Var { name, token })
+        } else {
+            None
+        };
+
+        self.consume(TokenType::OpenBrace, ErrorType::ExpectedBlockStart)?;
+
+        let mut members: Vec<Stmt> = Vec::new();
+
+        while !self.next_matches(vec![TokenType::CloseBrace, TokenType::EOF]) {
+            let val = if self.next_matches(vec![TokenType::Var]) {
+                self.variable()
+            } else {
+                self.function_statement()
+            };
+            members.push(val?);
+        }
+
+        Ok(Stmt::Class {
+            name,
+            token,
+            members,
+            superclass,
+        })
     }
 
     fn function_statement(&mut self) -> StmtResult {
@@ -347,8 +382,10 @@ impl<'a> Parser<'a> {
 
     fn assignment(&mut self) -> ExprResult {
         let mut expr = self.or()?;
+
         if self.next_matches(vec![TokenType::Assign]) {
             let token = self.previous().clone();
+
             let value = self.assignment()?;
 
             if let Expr::Var { name, token } = expr {
@@ -356,6 +393,15 @@ impl<'a> Parser<'a> {
                     name,
                     expr: Box::new(value),
                     token,
+                });
+            }
+
+            if let Some((name, token, obj)) = expr.as_get() {
+                return Ok(Expr::Set {
+                    token: token.clone(),
+                    obj: obj.clone(),
+                    name: name.clone(),
+                    value: Box::new(value),
                 });
             }
 
@@ -500,10 +546,16 @@ impl<'a> Parser<'a> {
 
     fn call(&mut self) -> ExprResult {
         let mut expr = self.primary()?;
-
         loop {
             if self.next_matches(vec![TokenType::OpenParenthesis]) {
                 expr = self.finish_call(expr)?;
+            } else if self.next_matches(vec![TokenType::Dot]) {
+                let (name, token) = self.get_identifier()?;
+                expr = Expr::Get {
+                    expr: Box::new(expr),
+                    name,
+                    token,
+                };
             } else {
                 break;
             }
@@ -524,6 +576,14 @@ impl<'a> Parser<'a> {
                 name: name.clone(),
                 token: token.clone(),
             }),
+            TokenType::This => Ok(Expr::This {
+                token: token.clone(),
+            }),
+            TokenType::Super => {
+                self.consume(TokenType::Dot, ErrorType::DotAfterSuper)?;
+                let (method_name, token) = self.get_identifier()?;
+                Ok(Expr::Super { method_name, token })
+            }
             TokenType::OpenParenthesis => {
                 let body = self.expr()?;
                 self.consume(TokenType::CloseParenthesis, ErrorType::UnclosedParenthesis)?;

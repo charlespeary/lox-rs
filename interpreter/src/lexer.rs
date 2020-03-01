@@ -201,6 +201,7 @@ impl Lexer {
             }
 
             let token_type: Option<TokenType> = match c {
+                ':' => Some(TokenType::Inherit),
                 '(' => Some(TokenType::OpenParenthesis),
                 ')' => Some(TokenType::CloseParenthesis),
                 '{' => Some(TokenType::OpenBrace),

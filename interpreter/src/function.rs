@@ -1,3 +1,4 @@
+use crate::class::Instance;
 use crate::environment::Environment;
 use crate::error::{error, Error, ErrorType};
 use crate::expr::Expr;
@@ -5,7 +6,7 @@ use crate::interpreter::Interpreter;
 use crate::runtime_value::Value;
 use crate::statement::Stmt;
 use crate::token::Token;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::rc::Rc;
 
 pub trait Callable {
@@ -13,7 +14,7 @@ pub trait Callable {
     fn call(&self, interpreter: &mut Interpreter, arguments: &Vec<Value>) -> Result<Value, Error>;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Function {
     Native {
         arity: usize,
@@ -24,6 +25,7 @@ pub enum Function {
         name: String,
         body: Vec<Stmt>,
         token: Token,
+        this: Option<Rc<RefCell<Instance>>>,
     },
 }
 
@@ -43,15 +45,27 @@ impl Callable for Function {
                 name,
                 body,
                 token,
+                this,
             } => {
                 if self.arity() != args.len() {
                     return error(token, ErrorType::InvalidNumberOfArguments);
                 }
+
+                if let Some(instance) = this {
+                    let inst = Value::Instance(instance.clone());
+                    env.define_or_update("this", &inst);
+
+                    if let Some(super_instance) = instance.borrow().get_super() {
+                        let super_obj = Value::Class(super_instance);
+                        env.define_or_update("super", &super_obj);
+                    }
+                }
+
                 for (arg, name) in args.into_iter().zip(params.into_iter()) {
                     env.define_or_update(name, arg);
                 }
-
-                interpreter.execute_block(body, Rc::new(RefCell::new(env)))?
+                let val = interpreter.execute_block(body, Rc::new(RefCell::new(env)))?;
+                val
             }
             Function::Native { body, .. } => body(),
         };
@@ -65,6 +79,25 @@ impl Function {
         match self {
             Function::Native { .. } => String::from("<native function>"),
             Function::Standard { name, .. } => format!("<{} function>", name),
+        }
+    }
+
+    pub fn bind(self, instance: Rc<RefCell<Instance>>) -> Self {
+        match self {
+            Function::Standard {
+                params,
+                name,
+                body,
+                token,
+                ..
+            } => Function::Standard {
+                params,
+                name,
+                body,
+                token,
+                this: Some(instance),
+            },
+            _ => self,
         }
     }
 }

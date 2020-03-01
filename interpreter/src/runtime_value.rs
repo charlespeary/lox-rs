@@ -1,15 +1,21 @@
+use crate::class::{Class, Instance as ClassInstance};
 use crate::error::Error;
 use crate::function::Function;
 use crate::token::Literal;
+use std::cell::RefCell;
 use std::fmt;
 use std::ops::{Add, Div, Mul, Sub};
+use std::rc::Rc;
 
-#[derive(Clone)]
+type Instance = Rc<RefCell<ClassInstance>>;
+#[derive(Clone, EnumAsInner)]
 pub enum Value {
     Function(Function),
     String(String),
     Number(f64),
     Boolean(bool),
+    Class(Class),
+    Instance(Instance),
     Null,
 }
 
@@ -41,7 +47,9 @@ impl fmt::Display for Value {
             Value::Number(num) => format!("{}", num).to_string(),
             Value::Boolean(b) => b.to_string(),
             Value::Function(fun) => fun.to_string(),
-            Null => "null".to_string(),
+            Value::Null => "null".to_string(),
+            Value::Class(class) => class.to_string(),
+            Value::Instance(instance) => instance.borrow().to_string(),
         };
         fmt.write_str(&str)?;
         Ok(())
@@ -55,7 +63,9 @@ impl fmt::Debug for Value {
             Value::Number(num) => format!("{}", num).to_string(),
             Value::Boolean(b) => b.to_string(),
             Value::Function(fun) => fun.to_string(),
-            Null => "null".to_string(),
+            Value::Null => "null".to_string(),
+            Value::Class(class) => class.to_string(),
+            Value::Instance(instance) => instance.borrow().to_string(),
         };
         fmt.write_str(&str)?;
         Ok(())

@@ -1,4 +1,5 @@
-use crate::error::{error, Error, ErrorType};
+use crate::class::Class;
+use crate::error::{Error, ErrorType};
 use crate::expr::{Expr, Visitor as ExprVisitor};
 use crate::interpreter::Interpreter;
 use crate::runtime_value::Value;
@@ -44,12 +45,39 @@ impl Init {
     }
 }
 
+#[derive(Debug)]
+pub enum ClassType {
+    Subclass,
+    Class,
+}
+
+#[derive(Debug)]
+pub struct ResolverState {
+    pub current_class: Option<ClassType>,
+}
+
+impl ResolverState {
+    pub fn new() -> Self {
+        ResolverState {
+            current_class: None,
+        }
+    }
+}
+
 pub struct Resolver<'a> {
     interpreter: &'a mut Interpreter,
     scopes: LinkedList<HashMap<String, bool>>,
+    pub state: ResolverState,
 }
 
 type ResolverResult = Result<(), Error>;
+
+fn error(token: &Token, error_type: ErrorType) -> ResolverResult {
+    Err(Error {
+        token: token.clone(),
+        error_type,
+    })
+}
 
 impl<'a> Resolver<'a> {
     pub fn new(interpreter: &'a mut Interpreter) -> Self {
@@ -59,28 +87,31 @@ impl<'a> Resolver<'a> {
         Resolver {
             interpreter,
             scopes,
+            state: ResolverState::new(),
         }
     }
 
-    fn resolve_stmt(&mut self, stmt: &Stmt) {
-        stmt.accept(self);
+    fn resolve_stmt(&mut self, stmt: &Stmt) -> ResolverResult {
+        stmt.accept(self)
     }
-
-    pub fn resolve_stmts(&mut self, stmts: &Vec<Stmt>) {
+    pub fn resolve_stmts(&mut self, stmts: &Vec<Stmt>) -> Vec<Error> {
+        let mut errors: Vec<Error> = vec![];
         for stmt in stmts {
-            self.resolve_stmt(stmt);
+            match self.resolve_stmt(stmt) {
+                Ok(_) => (),
+                Err(e) => errors.push(e),
+            }
         }
+        errors
     }
 
-    fn resolve_expr(&mut self, expr: &Expr) {
-        expr.accept(self);
+    fn resolve_expr(&mut self, expr: &Expr) -> ResolverResult {
+        expr.accept(self)
     }
 
     fn resolve_distance(&mut self, distance: VarRef) {
-        for (i, scope) in self.scopes.iter().rev().enumerate() {
+        for (depth, scope) in self.scopes.iter().rev().enumerate() {
             if let Some(_) = scope.get(&distance.name) {
-                //                let depth = if i == 0 { 0 } else { i - 1 };
-                let depth = i;
                 self.interpreter.resolve_distance(distance.clone(), depth);
                 return;
             }
@@ -133,8 +164,8 @@ impl<'a> Resolver<'a> {
 
 impl<'a> ExprVisitor<()> for Resolver<'a> {
     fn visit_binary(&mut self, left: &Expr, operator: &Token, right: &Expr) -> ResolverResult {
-        self.resolve_expr(left);
-        self.resolve_expr(right);
+        self.resolve_expr(left)?;
+        self.resolve_expr(right)?;
         Ok(())
     }
 
@@ -142,12 +173,12 @@ impl<'a> ExprVisitor<()> for Resolver<'a> {
         Ok(())
     }
     fn visit_unary(&mut self, operator: &Token, expr: &Expr) -> ResolverResult {
-        self.resolve_expr(expr);
+        self.resolve_expr(expr)?;
         Ok(())
     }
 
     fn visit_grouping(&mut self, expr: &Expr) -> ResolverResult {
-        self.resolve_expr(expr);
+        self.resolve_expr(expr)?;
         Ok(())
     }
 
@@ -168,26 +199,27 @@ impl<'a> ExprVisitor<()> for Resolver<'a> {
     }
 
     fn visit_assignment(&mut self, name: &String, expr: &Expr, token: &Token) -> ResolverResult {
-        self.resolve_expr(expr);
+        self.resolve_expr(expr)?;
         self.resolve_distance(VarRef::new(token, name));
         Ok(())
     }
 
     fn visit_logical(&mut self, left: &Expr, operator: &Token, right: &Expr) -> ResolverResult {
-        self.resolve_expr(left);
-        self.resolve_expr(right);
+        self.resolve_expr(left)?;
+        self.resolve_expr(right)?;
         Ok(())
     }
+
     fn visit_call(
         &mut self,
         callee: &Expr,
         token: &Token,
         arguments: &Vec<Expr>,
     ) -> ResolverResult {
-        self.resolve_expr(callee);
+        self.resolve_expr(callee)?;
 
         for arg in arguments {
-            self.resolve_expr(arg);
+            self.resolve_expr(arg)?;
         }
 
         Ok(())
@@ -203,23 +235,53 @@ impl<'a> ExprVisitor<()> for Resolver<'a> {
         self.resolve_function(params, body);
         Ok(())
     }
+
+    fn visit_get(&mut self, name: &String, token: &Token, expr: &Expr) -> ResolverResult {
+        self.resolve_expr(expr)?;
+        Ok(())
+    }
+
+    fn visit_set(
+        &mut self,
+        token: &Token,
+        name: &String,
+        value: &Expr,
+        obj: &Expr,
+    ) -> ResolverResult {
+        self.resolve_expr(value)?;
+        self.resolve_expr(obj)?;
+        Ok(())
+    }
+
+    fn visit_this(&mut self, token: &Token) -> ResolverResult {
+        self.resolve_distance(VarRef::new(token, &String::from("this")));
+        Ok(())
+    }
+
+    fn visit_super(&mut self, token: &Token, method_name: &String) -> ResolverResult {
+        if self.state.current_class.is_none() {
+            return error(token, ErrorType::CantUseSuper);
+        }
+        self.resolve_distance(VarRef::new(token, &String::from("super")));
+        Ok(())
+    }
 }
 
 impl<'a> StmtVisitor<()> for Resolver<'a> {
     fn visit_print_stmt(&mut self, expr: &Expr) -> ResolverResult {
-        self.resolve_expr(expr);
+        self.resolve_expr(expr)?;
         Ok(())
     }
 
     fn visit_expr_stmt(&mut self, expr: &Expr) -> ResolverResult {
-        self.resolve_expr(expr);
+        self.resolve_expr(expr)?;
         Ok(())
     }
 
     fn visit_var(&mut self, name: &String, expr: &Option<Expr>) -> ResolverResult {
         self.declare(name);
         match expr {
-            Some(e) => self.resolve_expr(e),
+            Some(e) => self.resolve_expr(e)?,
             None => (),
         };
         self.define(name);
@@ -239,7 +301,7 @@ impl<'a> StmtVisitor<()> for Resolver<'a> {
         then_body: &Stmt,
         else_body: &Option<Box<Stmt>>,
     ) -> ResolverResult {
-        self.resolve_expr(condition);
+        self.resolve_expr(condition)?;
         self.resolve_stmt(then_body);
         if let Some(stmt) = else_body {
             self.resolve_stmt(stmt);
@@ -248,7 +310,7 @@ impl<'a> StmtVisitor<()> for Resolver<'a> {
     }
 
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> ResolverResult {
-        self.resolve_expr(condition);
+        self.resolve_expr(condition)?;
         self.resolve_stmt(body);
         Ok(())
     }
@@ -272,9 +334,50 @@ impl<'a> StmtVisitor<()> for Resolver<'a> {
         self.resolve_function(params, body);
         Ok(())
     }
+    fn visit_class_stmt(
+        &mut self,
+        name: &String,
+        token: &Token,
+        members: &Vec<Stmt>,
+        superclass: &Option<Expr>,
+    ) -> ResolverResult {
+        self.declare(name);
+        self.define(name);
+
+        if let Some(sc) = superclass {
+            self.state.current_class = Some(ClassType::Subclass);
+            let (sc_name, sc_token) = sc.as_var().expect("Expected Expr::Var");
+            if sc_name == name {
+                return error(sc_token, ErrorType::CantInheritFromItself);
+            }
+            self.resolve_expr(sc)?;
+            self.scopes
+                .back_mut()
+                .unwrap()
+                .insert("super".to_owned(), true);
+        } else {
+            self.state.current_class = Some(ClassType::Class);
+        }
+
+        self.begin_scope();
+
+        self.scopes
+            .back_mut()
+            .unwrap()
+            .insert("this".to_owned(), true);
+
+        for stmt in members {
+            if let Some((params, body, ..)) = stmt.as_function() {
+                self.resolve_function(params, body);
+            }
+        }
+        self.end_scope();
+        self.state.current_class = None;
+        Ok(())
+    }
     fn visit_return_stmt(&mut self, value: &Option<Expr>, token: &Token) -> ResolverResult {
         if let Some(val) = value {
-            self.resolve_expr(val);
+            self.resolve_expr(val)?;
         }
         Ok(())
     }

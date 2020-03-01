@@ -1,3 +1,4 @@
+use crate::class::{Class, Instance};
 use crate::environment::Environment;
 use crate::error::{error, Error, ErrorType};
 use crate::expr::{Expr, Visitor as ExprVisitor};
@@ -84,14 +85,26 @@ impl Interpreter {
         }
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<Value, Error> {
+    pub fn evaluate(&mut self, expr: &Expr) -> Result<Value, Error> {
         expr.accept(self)
     }
 
-    fn lookup_variable(&mut self, var: VarRef) -> Option<Value> {
+    fn lookup_variable(&mut self, var: VarRef, token: &Token) -> Result<Value, Error> {
         let distance = self.get_distance(&var);
         let name = &var.name;
-        self.env.borrow().get_at(name, distance.unwrap_or(0))
+        let var = self.env.borrow().get_at(name, distance.unwrap_or(0));
+
+        match var {
+            Some(val) => Ok(val.clone()),
+            None => error(token, ErrorType::UndefinedVariable),
+        }
+    }
+
+    fn lookup_deep(&mut self, name: &str, token: &Token) -> Result<Value, Error> {
+        self.env
+            .borrow()
+            .get_deep(name)
+            .map_or_else(|| error(token, ErrorType::UndefinedVariable), |v| Ok(v))
     }
 
     fn get_distance(&self, var: &VarRef) -> Option<usize> {
@@ -218,12 +231,7 @@ impl ExprVisitor<Value> for Interpreter {
     }
 
     fn visit_var(&mut self, name: &String, token: &Token) -> Result<Value, Error> {
-        let var = self.lookup_variable(VarRef::new(token, name));
-        // not sure if we should clone anything at all here
-        match var {
-            Some(val) => Ok(val.clone()),
-            None => error(token, ErrorType::UndefinedVariable),
-        }
+        self.lookup_variable(VarRef::new(token, name), token)
     }
 
     fn visit_assignment(
@@ -283,6 +291,7 @@ impl ExprVisitor<Value> for Interpreter {
                 self.state.enter_call();
                 func.call(self, &args?)
             }
+            Value::Class(class) => class.call(self, &args?),
             _ => error(token, ErrorType::ValueNotCallable),
         };
 
@@ -302,7 +311,59 @@ impl ExprVisitor<Value> for Interpreter {
             body: body.clone(),
             name: name.clone(),
             token: token.clone(),
+            this: None,
         }))
+    }
+
+    fn visit_get(&mut self, name: &String, token: &Token, expr: &Expr) -> Result<Value, Error> {
+        let obj = self.evaluate(expr)?;
+        match obj {
+            Value::Instance(instance) => instance.borrow().get(name, token),
+            _ => error(token, ErrorType::ValueNotInstance),
+        }
+    }
+
+    fn visit_set(
+        &mut self,
+        token: &Token,
+        name: &String,
+        value: &Expr,
+        obj: &Expr,
+    ) -> Result<Value, Error> {
+        let mut instance = self.evaluate(obj)?;
+
+        match instance {
+            Value::Instance(ref mut instance) => {
+                let val = self.evaluate(value)?;
+                instance.borrow_mut().set(name, token, val);
+            }
+            _ => return error(token, ErrorType::ValueNotInstance),
+        }
+
+        Ok(instance)
+    }
+
+    fn visit_this(&mut self, token: &Token) -> Result<Value, Error> {
+        self.lookup_deep("this", token)
+    }
+
+    fn visit_super(&mut self, token: &Token, method_name: &String) -> Result<Value, Error> {
+        let superclass = self.lookup_deep("super", token)?;
+
+        match superclass.as_class().unwrap().find_method(method_name) {
+            Some(method) => {
+                let instance = self
+                    .env
+                    .borrow()
+                    .get_deep("this")
+                    .unwrap()
+                    .as_instance()
+                    .unwrap()
+                    .clone();
+                Ok(Value::Function(method.clone().bind(instance)))
+            }
+            None => error(token, ErrorType::MethodNotFound),
+        }
     }
 }
 
@@ -387,11 +448,37 @@ impl StmtVisitor<Value> for Interpreter {
             body: body.clone(),
             params: params.clone(),
             token: token.clone(),
+            this: None,
         });
 
         self.env.borrow_mut().define_or_update(name, &function);
 
         Ok(function)
+    }
+
+    fn visit_class_stmt(
+        &mut self,
+        name: &String,
+        token: &Token,
+        members: &Vec<Stmt>,
+        superclass: &Option<Expr>,
+    ) -> Result<Value, Error> {
+        self.env.borrow_mut().define_or_update(name, &Value::Null);
+
+        let superclass = if let Some(superclass) = superclass {
+            match self.evaluate(superclass)? {
+                Value::Class(sc) => Some(Box::new(sc)),
+                _ => return error(token, ErrorType::CanOnlyInheritFromClass),
+            }
+        } else {
+            None
+        };
+
+        let class = Class::new(name, members, superclass, self)?;
+        self.env
+            .borrow_mut()
+            .define_or_update(name, &Value::Class(class));
+        Ok(Value::Null)
     }
 
     fn visit_return_stmt(&mut self, value: &Option<Expr>, token: &Token) -> Result<Value, Error> {

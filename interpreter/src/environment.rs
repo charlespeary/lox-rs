@@ -53,6 +53,7 @@ impl Environment {
             .enclosing
             .clone()
             .expect("Trying to access environment that doesn't exist");
+
         for i in 1..distance {
             let enclosing = env.borrow().enclosing.clone();
             if let Some(e) = &enclosing {
@@ -67,6 +68,19 @@ impl Environment {
             self.get(name)
         } else {
             self.ancestor(distance).borrow().get(name)
+        }
+    }
+
+    pub fn get_deep(&self, name: &str) -> Option<Value> {
+        match self.values.get(name) {
+            Some(this) => Some(this.clone()),
+            None => {
+                if let Some(e) = &self.enclosing {
+                    e.borrow().get_deep(name)
+                } else {
+                    None
+                }
+            }
         }
     }
 }

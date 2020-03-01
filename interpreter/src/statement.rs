@@ -24,10 +24,17 @@ pub trait Visitor<R> {
         body: &Vec<Stmt>,
         token: &Token,
     ) -> Result<R, Error>;
+    fn visit_class_stmt(
+        &mut self,
+        name: &String,
+        token: &Token,
+        members: &Vec<Stmt>,
+        superclass: &Option<Expr>,
+    ) -> Result<R, Error>;
     fn visit_return_stmt(&mut self, value: &Option<Expr>, token: &Token) -> Result<R, Error>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, EnumAsInner)]
 pub enum Stmt {
     Print {
         expr: Expr,
@@ -59,6 +66,12 @@ pub enum Stmt {
         name: String,
         token: Token,
     },
+    Class {
+        name: String,
+        token: Token,
+        members: Vec<Stmt>,
+        superclass: Option<Expr>,
+    },
     Return {
         token: Token,
         value: Option<Expr>,
@@ -86,6 +99,12 @@ impl Stmt {
                 body,
                 token,
             } => visitor.visit_function_stmt(name, params, body, token),
+            Stmt::Class {
+                name,
+                token,
+                members,
+                superclass,
+            } => visitor.visit_class_stmt(name, token, members, superclass),
             Stmt::Return { value, token } => visitor.visit_return_stmt(value, token),
         }
     }

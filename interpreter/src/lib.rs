@@ -2,8 +2,10 @@
 extern crate derive_more;
 #[macro_use]
 extern crate lazy_static;
-
+#[macro_use]
+extern crate enum_as_inner;
 mod ast;
+mod class;
 mod environment;
 mod error;
 mod expr;
@@ -45,8 +47,12 @@ pub fn run_code(source_code: &str) -> Result<(), Error> {
             let stmts = parser.parse_tokens()?;
             let mut interpreter = Interpreter::new();
             let mut resolver = Resolver::new(&mut interpreter);
-            resolver.resolve_stmts(&stmts);
-            interpreter.interpret(&stmts)?;
+            let resolver_errors = resolver.resolve_stmts(&stmts);
+            if resolver_errors.len() == 0 {
+                interpreter.interpret(&stmts)?;
+            } else {
+                println!("{:#?}", resolver_errors);
+            }
             Ok(())
         }
         Err(e) => Err(e[0].clone()),

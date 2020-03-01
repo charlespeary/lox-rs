@@ -49,6 +49,7 @@ pub enum TokenType {
     Function,
     Return,
     Class,
+    Inherit,
     Super,
     This,
     Null,

@@ -1,5 +1,5 @@
 use crate::runtime_value::Value;
-use crate::token::Token;
+use crate::token::{Token, TokenType};
 
 #[derive(Debug, Clone, Display)]
 pub enum ErrorType {
@@ -53,6 +53,22 @@ pub enum ErrorType {
     CantUseVariableInItsInitializer,
     #[display(fmt = "Variable with this name already declared in this scope")]
     DoubleDeclarationInSameScope,
+    #[display(fmt = "Return")]
+    Return(Value),
+    #[display(fmt = "Value is not an instance, therefore you can't access its properties")]
+    ValueNotInstance,
+    #[display(fmt = "This instance doesn't have this property")]
+    PropertyDoesntExist,
+    #[display(fmt = "Class can't inherit from itself")]
+    CantInheritFromItself,
+    #[display(fmt = "Can only inherit from class")]
+    CanOnlyInheritFromClass,
+    #[display(fmt = "Expected dot after super")]
+    DotAfterSuper,
+    #[display(fmt = "Method not found in the superclass instance")]
+    MethodNotFound,
+    #[display(fmt = "Can't use super outside class or inside a class without superclass")]
+    CantUseSuper,
 }
 
 #[derive(Debug, Clone)]
@@ -65,5 +81,17 @@ pub fn error(token: &Token, error_type: ErrorType) -> Result<Value, Error> {
     Err(Error {
         token: token.clone(),
         error_type,
+    })
+}
+
+pub fn return_stmt(val: Value) -> Result<(), Error> {
+    Err(Error {
+        token: Token {
+            token_type: TokenType::Return,
+            line: 0,
+            start: 0,
+            end: 0,
+        },
+        error_type: ErrorType::Return(val),
     })
 }
