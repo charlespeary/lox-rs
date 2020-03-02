@@ -425,12 +425,12 @@ impl StmtVisitor<Value> for Interpreter {
         Ok(Value::Null)
     }
 
-    fn visit_break_stmt(&mut self) -> Result<Value, Error> {
+    fn visit_break_stmt(&mut self, token: &Token) -> Result<Value, Error> {
         self.state.should_break = true;
         Ok(Value::Null)
     }
 
-    fn visit_continue_stmt(&mut self) -> Result<Value, Error> {
+    fn visit_continue_stmt(&mut self, token: &Token) -> Result<Value, Error> {
         self.state.should_continue = true;
         Ok(Value::Null)
     }

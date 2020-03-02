@@ -54,13 +54,22 @@ pub enum ClassType {
 #[derive(Debug)]
 pub struct ResolverState {
     pub current_class: Option<ClassType>,
+    pub inside_loop: bool,
 }
 
 impl ResolverState {
     pub fn new() -> Self {
         ResolverState {
             current_class: None,
+            inside_loop: false,
         }
+    }
+
+    pub fn is_inside_loop(&self, token: &Token) -> ResolverResult {
+        if !self.inside_loop {
+            return error(token, ErrorType::NotAllowedOutsideLoop);
+        }
+        Ok(())
     }
 }
 
@@ -94,15 +103,19 @@ impl<'a> Resolver<'a> {
     fn resolve_stmt(&mut self, stmt: &Stmt) -> ResolverResult {
         stmt.accept(self)
     }
-    pub fn resolve_stmts(&mut self, stmts: &Vec<Stmt>) -> Vec<Error> {
+
+    pub fn resolve_stmts(&mut self, stmts: &Vec<Stmt>) -> Result<(), Vec<Error>> {
         let mut errors: Vec<Error> = vec![];
         for stmt in stmts {
             match self.resolve_stmt(stmt) {
-                Ok(_) => (),
                 Err(e) => errors.push(e),
+                _ => (),
             }
         }
-        errors
+        match errors.is_empty() {
+            true => Ok(()),
+            false => Err(errors),
+        }
     }
 
     fn resolve_expr(&mut self, expr: &Expr) -> ResolverResult {
@@ -310,16 +323,20 @@ impl<'a> StmtVisitor<()> for Resolver<'a> {
     }
 
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> ResolverResult {
+        self.state.inside_loop = true;
         self.resolve_expr(condition)?;
         self.resolve_stmt(body);
+        self.state.inside_loop = false;
         Ok(())
     }
 
-    fn visit_break_stmt(&mut self) -> ResolverResult {
+    fn visit_break_stmt(&mut self, token: &Token) -> ResolverResult {
+        self.state.is_inside_loop(token)?;
         Ok(())
     }
 
-    fn visit_continue_stmt(&mut self) -> ResolverResult {
+    fn visit_continue_stmt(&mut self, token: &Token) -> ResolverResult {
+        self.state.is_inside_loop(token)?;
         Ok(())
     }
     fn visit_function_stmt(

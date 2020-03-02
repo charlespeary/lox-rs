@@ -7,20 +7,9 @@ use crate::token::Token;
 use crate::token::TokenType::{CloseParenthesis, Var};
 use std::mem;
 
-pub struct ParserState {
-    pub inside_loop: bool,
-}
-
-impl ParserState {
-    pub fn new() -> Self {
-        ParserState { inside_loop: false }
-    }
-}
-
 pub struct Parser<'a> {
     tokens: &'a Vec<Token>,
     current: usize,
-    state: ParserState,
 }
 
 type ExprResult = Result<Expr, Error>;
@@ -28,11 +17,7 @@ type StmtResult = Result<Stmt, Error>;
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
-        Parser {
-            tokens,
-            current: 0,
-            state: ParserState::new(),
-        }
+        Parser { tokens, current: 0 }
     }
 
     fn peek(&self) -> &Token {
@@ -85,14 +70,20 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_tokens(&mut self) -> Result<Vec<Stmt>, Error> {
+    pub fn parse_tokens(&mut self) -> Result<Vec<Stmt>, Vec<Error>> {
         let mut statements: Vec<Stmt> = Vec::new();
+        let mut errors: Vec<Error> = Vec::new();
 
         while !self.is_at_end() {
-            let stmt = self.declaration()?;
-            statements.push(stmt);
+            match self.declaration() {
+                Ok(s) => statements.push(s),
+                Err(e) => errors.push(e),
+            }
         }
-        return Ok(statements);
+        match errors.is_empty() {
+            true => Ok(statements),
+            false => Err(errors),
+        }
     }
 
     fn get_identifier(&mut self) -> Result<(String, Token), Error> {
@@ -249,8 +240,6 @@ impl<'a> Parser<'a> {
     }
 
     fn for_stmt(&mut self) -> StmtResult {
-        self.state.inside_loop = true;
-
         self.consume(
             TokenType::OpenParenthesis,
             ErrorType::ExpectedOpenParenthesis,
@@ -273,16 +262,12 @@ impl<'a> Parser<'a> {
 
         let while_loop = Stmt::While { condition, body };
 
-        self.state.inside_loop = false;
-
         Ok(Stmt::Block {
             stmts: vec![initializer, while_loop],
         })
     }
 
     fn while_statement(&mut self) -> StmtResult {
-        self.state.inside_loop = true;
-
         self.consume(
             TokenType::OpenParenthesis,
             ErrorType::ExpectedCloseParenthesis,
@@ -293,8 +278,6 @@ impl<'a> Parser<'a> {
             ErrorType::ExpectedCloseParenthesis,
         )?;
         let body = Box::new(self.statement()?);
-
-        self.state.inside_loop = false;
 
         Ok(Stmt::While { condition, body })
     }
@@ -324,18 +307,15 @@ impl<'a> Parser<'a> {
     }
 
     fn break_or_continue_statement(&mut self) -> StmtResult {
-        let res = if self.state.inside_loop {
-            if self.previous().token_type == TokenType::Break {
-                Ok(Stmt::Break)
-            } else {
-                Ok(Stmt::Continue)
-            }
+        let token = self.previous().clone();
+        let stmt = if self.previous().token_type == TokenType::Break {
+            Stmt::Break { token }
         } else {
-            let token = self.previous().clone();
-            self.error::<Stmt>(ErrorType::NotAllowedOutsideLoop, &token)
+            Stmt::Continue { token }
         };
+
         self.consume(TokenType::Semicolon, ErrorType::ExpectedSemicolon)?;
-        res
+        Ok(stmt)
     }
 
     fn print_statement(&mut self) -> StmtResult {

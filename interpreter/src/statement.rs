@@ -15,8 +15,8 @@ pub trait Visitor<R> {
         else_body: &Option<Box<Stmt>>,
     ) -> Result<R, Error>;
     fn visit_while_stmt(&mut self, condition: &Expr, body: &Stmt) -> Result<R, Error>;
-    fn visit_break_stmt(&mut self) -> Result<R, Error>;
-    fn visit_continue_stmt(&mut self) -> Result<R, Error>;
+    fn visit_break_stmt(&mut self, token: &Token) -> Result<R, Error>;
+    fn visit_continue_stmt(&mut self, token: &Token) -> Result<R, Error>;
     fn visit_function_stmt(
         &mut self,
         name: &String,
@@ -58,8 +58,12 @@ pub enum Stmt {
         condition: Expr,
         body: Box<Stmt>,
     },
-    Break,
-    Continue,
+    Break {
+        token: Token,
+    },
+    Continue {
+        token: Token,
+    },
     Function {
         params: Vec<String>,
         body: Vec<Stmt>,
@@ -91,8 +95,8 @@ impl Stmt {
                 else_body,
             } => visitor.visit_if_stmt(condition, then_body, else_body),
             Stmt::While { condition, body } => visitor.visit_while_stmt(condition, body),
-            Stmt::Continue => visitor.visit_continue_stmt(),
-            Stmt::Break => visitor.visit_break_stmt(),
+            Stmt::Continue { token } => visitor.visit_continue_stmt(token),
+            Stmt::Break { token } => visitor.visit_break_stmt(token),
             Stmt::Function {
                 name,
                 params,

@@ -39,7 +39,7 @@ pub enum ErrorType {
     ExpectedBlockStart,
     #[display(fmt = "Expected if statement to have an else block")]
     ExpectedElseStatement,
-    #[display(fmt = "This keyword needs can't be used outside of the loops")]
+    #[display(fmt = "Cannot be used outside loops")]
     NotAllowedOutsideLoop,
     #[display(fmt = "Maximum number of the arguments is 255")]
     MaximumArguments,
@@ -94,4 +94,18 @@ pub fn return_stmt(val: Value) -> Result<(), Error> {
         },
         error_type: ErrorType::Return(val),
     })
+}
+
+pub fn print_errors(errors: &Vec<Error>) {
+    for err in errors {
+        let Error { token, error_type } = err;
+        let Token {
+            token_type,
+            line,
+            start,
+            end,
+        } = token;
+
+        println!("{}.{}-{} : {}", line, start, end, error_type);
+    }
 }
