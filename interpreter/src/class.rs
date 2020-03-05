@@ -55,6 +55,7 @@ impl Class {
                             name: name.clone(),
                             token: token.clone(),
                             this: None,
+                            closure: Rc::clone(&interpreter.env),
                         },
                     );
                 }

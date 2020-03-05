@@ -349,7 +349,6 @@ impl<'a> Parser<'a> {
                     token: token.clone(),
                 }
             };
-
             return Ok(Expr::Closure {
                 params,
                 body: vec![body],

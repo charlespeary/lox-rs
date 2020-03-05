@@ -26,6 +26,7 @@ pub enum Function {
         body: Vec<Stmt>,
         token: Token,
         this: Option<Rc<RefCell<Instance>>>,
+        closure: Rc<RefCell<Environment>>,
     },
 }
 
@@ -38,7 +39,6 @@ impl Callable for Function {
     }
 
     fn call(&self, interpreter: &mut Interpreter, args: &Vec<Value>) -> Result<Value, Error> {
-        let mut env = Environment::from(&interpreter.env);
         let val = match self {
             Function::Standard {
                 params,
@@ -46,7 +46,9 @@ impl Callable for Function {
                 body,
                 token,
                 this,
+                closure,
             } => {
+                let mut env = Environment::from(closure);
                 if self.arity() != args.len() {
                     return error(token, ErrorType::InvalidNumberOfArguments);
                 }
@@ -89,6 +91,7 @@ impl Function {
                 name,
                 body,
                 token,
+                closure,
                 ..
             } => Function::Standard {
                 params,
@@ -96,6 +99,7 @@ impl Function {
                 body,
                 token,
                 this: Some(instance),
+                closure,
             },
             _ => self,
         }

@@ -312,6 +312,7 @@ impl ExprVisitor<Value> for Interpreter {
             name: name.clone(),
             token: token.clone(),
             this: None,
+            closure: Rc::clone(&self.env),
         }))
     }
 
@@ -449,6 +450,7 @@ impl StmtVisitor<Value> for Interpreter {
             params: params.clone(),
             token: token.clone(),
             this: None,
+            closure: Rc::clone(&self.env),
         });
 
         self.env.borrow_mut().define_or_update(name, &function);

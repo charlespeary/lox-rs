@@ -54,6 +54,7 @@ pub fn run_code(source_code: &str) -> Result<(), Vec<Error>> {
     let mut interpreter = Interpreter::new();
     let mut resolver = Resolver::new(&mut interpreter);
     resolver.resolve_stmts(&stmts)?;
+    println!("{:#?}", interpreter.distances);
     interpreter.interpret(&stmts);
     Ok(())
 }
