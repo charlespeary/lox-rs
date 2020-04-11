@@ -90,7 +90,6 @@ myClassInstance.whoAmI();
 print myClassInstance;
 
 // inheritance
-
 class InheritingClass : MyClass {
 
     callMe() {

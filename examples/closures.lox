@@ -1,7 +1,0 @@
-var a = 10;
-var b = 20;
-var c = 30;
-
-var nestedClosure = |a, b| => |c| => (a + b) * c;
-var closure = nestedClosure(10, 10);
-print closure(2);
