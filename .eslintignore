@@ -1,0 +1,6 @@
+/interpreter/*
+/pkg/*
+/node_modules/*
+/target/*
+/public/*
+/examples/*
